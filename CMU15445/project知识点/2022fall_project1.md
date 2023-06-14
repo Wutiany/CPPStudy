@@ -1,11 +1,20 @@
 # C++知识
-## 
-
-
+## std::shared_ptr
+* `std::scoped_lock<std::mutex> lock(latch_);` 互斥锁包装器，在作用域对互斥锁进行锁定，超出作用域解锁
+## 位运算
+* 使用位运算，只有一个位为 1 的二进制数，与要判断的位进行 & 操作，即可判断可这个数的该位是否位 1
+* 可以通过判断等于 == 0U 来判断， U 为无符号
+## vector 容器
+* `vector` 可以使用 `resize` 来改变容器大小
+## std::find_if(begin(), end(), condition)
+* 查找迭代器中满足条件的
+* `condition` 可以使用`lambda`表达式:`[key](const std::pair<K, V> &p) { return p.first == key; }`
+* lambda表达式：`[作用域捕获数据](传入参数){行为}`
 ## 经验
+* 新增一倍的vector元素，这些元素是原本元素的副本，使用 `vector[i + capcity] = vector[i]`  去为新增的元素复制以前的元素(capcity 为未新增时的容量)
 
 
-****
+
 # Buffer Pool
 缓冲池负责主存和磁盘之间来回移动物理页。<br>
 需要实现 **线程安全** 的缓冲池
