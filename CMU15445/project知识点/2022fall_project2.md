@@ -63,3 +63,21 @@
 * 在删除，查询，插入的操作中，为了提高并发性，使用蟹式锁，更细粒度的锁节点
 # 调试经验
 ## BPlusTree可视化
+* 下载可视化工具：https://graphviz.org/download/
+* 使用代码生成树的`dot`文件
+```shell
+$ # To build the tool
+$ mkdir build
+$ cd build
+$ make b_plus_tree_printer -j$(nproc)
+$ ./bin/b_plus_tree_printer
+>> ... USAGE ...
+>> 5 5 // set leaf node and internal node max size to be 5
+>> f input.txt // Insert into the tree with some inserts 
+>> g my-tree.dot // output the tree to dot format 
+>> q // Quit the test (Or use another terminal) 
+```
+* 使用命令将dot文件生成可视化的图片
+```shell
+dot -Tpng -O my-tree.dot
+```
