@@ -30,6 +30,10 @@ EXPOSE 22 8080
 ```
 这部分我在更换源仍旧执行 RUN apt-get update 一直停住，使用网上写在 Dockerfile 中的换源代码，在执行 apt-get 的时候出错
 * 当前文件夹下写 sources.list
+* 生成新的 gcc 镜像
+```shell
+docker build -t gcc .
+```
 ## 运行容器
 ```shell
 docker run -it -p 22:22 -p 8080:8080 -v F:\project:/root/project --name gcc gcc
@@ -63,3 +67,9 @@ ssh root@127.0.0.1 -A
 ```
 * 右下方新建终端，和打开远程的文件夹
 * 安装 C++ 插件
+## 连接出错（更换连接的情况下，密钥出问题）
+* 更新本地密钥
+```shell
+ssh-keygen -R <server_host_name_or_ip>
+```
+* 在本地更新就就可以使用了 ssh 进行连接了
