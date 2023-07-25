@@ -41,6 +41,8 @@ docker run -it -p 22:22 -p 8080:8080 -v F:\project:/root/project --name gcc gcc
   * -v D:\yazi\yazi-web:/root/yazi-web：表示将本地目录D:\yazi\yazi-web映射到容器内部的/root/yazi-web目录，用于在容器中访问本地文件。
   * --name gcc：表示指定容器的名称为gcc。
   * gcc：表示指定运行的镜像名称为gcc。
+## 安装 ubuntu 镜像
+* 只需要去 docker hub 查看版本，然后修改 FROM 的 ubuntu 版本
 ## 启动容器的 SSH 服务用以 VScode 进行远程连接
 * 修改 sshd 配置文件，允许 root 用户登陆
 ```shell
