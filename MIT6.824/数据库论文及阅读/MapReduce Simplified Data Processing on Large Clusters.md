@@ -58,8 +58,8 @@ reduce(String key, Iterator values):
 
 针对基于集群的计算环境定制的 `MapReduce` 接口的实现
 
-![image-20230713143259040](.\src\image-20230713143259040.png)
-
+* <img height=“auto” src="./src/image-20230713143259040.png" width=“auto”/>
+  
 * 数据切分成 `R` 个片
   * C++ 通过文件流（不会读取到内存中）读取文件
   * 然后设置需要读取片大小的缓冲区
