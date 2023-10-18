@@ -28,7 +28,7 @@ EXPOSE 22 8080
 * windows 生成 ssh 的一对公钥和私钥文件
 
   ```shell
-  ssh-keygen -t rsa
+  $ ssh-keygen -t rsa
   ```
 
 * 公钥私钥生成路径：C:\Users\电脑用户名\\.ssh\id_rsa.pub  `id_rsa.pub` 公钥文件
@@ -38,7 +38,7 @@ EXPOSE 22 8080
   * 使用命令（windows下不行）
 
     ```shell
-    ssh-copy-id -i id_rsa.pub root@127.0.0.1
+    $ ssh-copy-id -i id_rsa.pub root@127.0.0.1
     ```
 
   * 直接复制到映射的文件夹中
@@ -48,7 +48,7 @@ EXPOSE 22 8080
 * 然后将复制过去的公钥内容发送到  `authorized_keys` 文件中，**再次连接则无需使用密码**
 
   ```shell
-  cat id_isa.pub > ~/.ssh/authorized_keys
+  $ cat id_isa.pub > ~/.ssh/authorized_keys
   ```
 
 * 服务器插件安装
