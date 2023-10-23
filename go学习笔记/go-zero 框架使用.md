@@ -534,3 +534,118 @@ service user {
 
 [API 规范 | go-zero Documentation](https://go-zero.dev/docs/tutorials)
 
+## 4.jwt 使用
+
+### 4.1 jwt 开关
+
+
+
+
+
+
+
+## 5.api 整体框架逻辑
+
+### 5.1 文件结构
+
+├─etc
+├─internal
+│  ├─config
+│  ├─handler
+│  │  ├─login
+│  │  ├─order
+│  │  ├─register
+│  │  └─update
+│  ├─logic
+│  │  ├─login
+│  │  ├─order
+│  │  ├─register
+│  │  └─update
+│  ├─svc
+│  └─types
+
+* etc 中的 service.yaml：是服务器的配置文件，用来初始化服务器配置（api 所需要的信息都可以存这里面）
+  * Name，Host，Port
+  * Config 结构体中定义的变量，如 Auth 的参数
+* internal
+  * config 中的 config.go：是服务器的配置定义，需要通过 service.yaml 来初始化
+    * 这里面配置变量的访问是通过 svcCtx 来进行访问，数据库模型可以放在这里面（l.svcCtx.Config.Auth.AccessExpire）
+  * handler 存放了不同的 handler
+  * logic 是 ServeHTTP 中的逻辑（handler 处理请求的逻辑）
+  * svc 中 servicecontext.go 的代码中存放的是服务器的上下文（定义的上下文结构体），同时使用初始化函数（newServiceContext）进行初始化
+    * 配置（Config）服务器的配置，鉴权的配置字段（密钥，持续时长）也在这
+    * 数据库模型声明（ServiceContext结构体中），和初始化
+  * types api 请求和响应的数据类型
+
+### 5.2 代码逻辑结构
+
+**server：是一个整体（servicenameLogic 就是服务）（这个就相当于 /net/http 中的 handle 结构体）**
+
+* servicenameLogic struct（封装了服务需要的字段和方法）
+  * 方法：servicename（servicenameLogic struct）自动生成，处理请求的逻辑主体
+  * 字段：
+    * ctx（context.Context）这个字段中包括了对客户端 request 的处理
+    * svcCtx（*svc.ServiceContext）这个字段是封装的服务的一些功能，服务会调用的东西，配置文件，tablesModel
+
+**创建逻辑**
+
+主体的 service.go（main 函数，api 服务的主体） 会先使用 rest 中的方法将 config 文件中的 config 结构体作为参数创建一个 http server，在通过 serviceContext 创建一个服务器会使用到的上下文结构体（服务器会使用到的数据库模型等），在通过 ResigterHandler 创建 router 对应的 handler（这个是 handle，不是 func，而是结构体，相当于 Handle）然后开启服务。逻辑与 net/http 相似，不过服务器的配置信息（port、ip 等）都在 config 中了（rest.RestConf go-zero 提供的一个结构体中已经封装好了参数），也可以使用 yaml 文件进行初始化服务器参数。
+
+结构
+
+|main.go
+
+|—创建服务器
+
+|—通过 yaml 文件初始化服务器配置（config 结构体）
+
+|——初始化 config 结构体
+
+|—使用 config 结构体的 RestConf 字段创建服务器（等同于 http.Server 的初始化）
+
+|—创建服务器的上下文（服务器会用到的结构体和字段，配置文件“config 结构体”，数据库模型“tableModel”）
+
+|——服务器上下文（ServiceContext 结构体）可以通过 handler 进行访问（l.svcCtx）
+
+|——可以将服务器的使用的东西如：数据库表的操作模型放置到这里里面作为一个字段，通过 l.svcCtx.TableModel 进行访问
+
+|—创建服务器的 handler（mux.Handle，这里是结构体），handle 结构体，用来处理每个对应的 router
+
+|——logic 结构体封装了服务器上下文，和上下文（上下文可以用来获取请求的一些头部信息，通过Value 来进行获取）
+
+**主要的结构体**
+
+* Config 结构体：用来获取服务器的配置，如增加的鉴权后的参数，logic 可以通过这个进行访问
+* ServiceContext 结构体：服务器的上下文结构体，将 Config 结构体作为其中的一个字段，同时服务器的一些其他组件如数据库都可以放在这里，该结构体通过 NewServiceContext 进行获取，传入的参数为初始化好的 Config 结构体
+* Logic 结构体：Logic Handle，通过将服务器上下文结构体作为其中的字段，来获取访问服务器的一些功能和参数，同时封装了日志，和将请求解析（请求头部或者鉴权的 token 解析的 payload）的上下文
+
+## 6.mysql 使用
+
+### 6.1 mysql 代码结构的生成
+
+* 生成的基本函数
+  * Delete
+  * FindOne
+  * FIndOneByUniqueKey
+  * Insert
+  * Update
+  * tableName
+* 根据设置 **unique key** 生成查询的函数
+  * 默认生成主键的查询函数（FindOne）
+  * 然后根据 **unique key** 生成其他的查询函数
+  * unique key 会生成索引，所以会根据 `unique key` 生成查询函数
+
+### 6.2 查询函数
+
+* 查询函数使用的是预编译的语句，其使用了第三方库 `github.com/go-sql-driver/mysql` 来实现的
+
+
+
+
+
+
+
+
+
+​	
+
