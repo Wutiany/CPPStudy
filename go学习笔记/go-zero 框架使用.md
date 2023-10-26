@@ -536,13 +536,62 @@ service user {
 
 ## 4.jwt 使用
 
-### 4.1 jwt 开关
+### 4.1 jwt 组成
 
+#### 4.1.1 编码的各个结构以及方法
 
+* HEADER（头部）
+  * 其中包括了对签名的加密算法，和密钥的 id（'typ':"JWT"）
+  * 使用 Base64 进行编码
+* PAYLOAD（荷载）
+  * 其中包括了需要加密的内容，但是不能将用户隐私信息放入进行加密（密码）
+  * 依旧使用 Base64 进行编码
+* SIGNATURE（签名）
+  * 对头部和荷载部分进行加密生成的，使用头部中的加密算法进行加密
+  * 首先将编码完成之后的头部和荷载使用 "." 进行拼接，形成一个字符串
+  * 然后使用指定的算法和密钥对该字符串进行加密生成签名
+  * 将生成的签名进行 Base64 编码
+* 编码结果
+  * 头部.荷载.签名
 
+#### 4.1.2 传输
 
+* 服务器传给客户端：
+  * 放置在 **header** 中，格式：`Authorization: Bearer token(不带'')`（一般使用的方法）
+  * 放置在表单中：json 中
+* 客户端传给服务器：
+  * 放置在 **header** 中，格式：`Authorization: Bearer token(不带'')`（一般使用的方法）
+  * 放置在 url 中
 
+#### 4.1.3 服务端解析 token 内容
 
+使用 handler 结构中的 context（ctx）的 Value 方法进行解析，ctx 会将解析出来的头的内容以及 token 解析出来的内容，通过 **map** 进行保存
+
+`authHeader := l.ctx.Value("username")`
+
+### 4.2 jwt 开关
+
+鉴权开关`jwt: Auth`，开启鉴权开关，然后需要编写产生 **token** 的**function**，在处理登陆请求的时候，通过产生 **token** 的 **function** 返回客户端 **token**
+
+### 4.3 token 生成
+
+```go
+func GetJwtToken(secretKey string, iat, seconds int64, username string) (string, error) {
+	claims := make(jwt.MapClaims)
+	claims["exp"] = iat + seconds
+	claims["iat"] = iat
+	claims["username"] = username  // 需要
+	token := jwt.New(jwt.SigningMethodHS256)
+	token.Claims = claims
+	return token.SignedString([]byte(secretKey))
+}
+```
+
+### 4.4 token 解析
+
+使用 handler 结构中的 context（ctx）的 Value 方法进行解析，ctx 会将解析出来的头的内容以及 token 解析出来的内容，通过 **map** 进行保存
+
+`authHeader := l.ctx.Value("username")`
 
 ## 5.api 整体框架逻辑
 
@@ -639,7 +688,31 @@ service user {
 
 * 查询函数使用的是预编译的语句，其使用了第三方库 `github.com/go-sql-driver/mysql` 来实现的
 
+### 6.3 自定义查询等方法
 
+#### 6.3.1 定义位置
+
+* tabelnamemodel.go 中定义
+* tabelnamemodel_gen.go 是已经产生的，不能取更改
+
+#### 6.3.2 定义方法
+
+* 首先是查询等方法的编写，编写成 customTablenameModel 结构体的方法
+* 然后对接口进行声明方法（tablenameModel）接口，其本身存在一个接口，这个接口定义了原始的方法（defaultTablenameModel 结构的方法），只需要对新的方法进行添加就可以了
+* 结构体嵌套 -- 》接口的方法也需要进行嵌套（要和结构体的结构对应）
+
+## 7 middleware 使用
+
+### 7.1 启用 middleware
+
+* 在 api 文件进行定义就行，自定义 middleware 名字，多个中间件，使用逗号隔开
+
+### 7.2 middleware 编写
+
+* 位置 internal/middleware 下的文件
+* 对其中的文件进行中间件处理逻辑的编写就行
+  * 中简件的 Handle 函数是需要编写的，Handle 函数返回一个 http.HandlerFunc
+  * 中间件是处理 request 请求，然后通过处理逻辑在进入下一个 handler
 
 
 
