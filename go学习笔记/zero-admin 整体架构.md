@@ -108,3 +108,69 @@
 * **middleware** 文件，中间件，对请求进行预处理（检查 **url** 是否合法，对每个特定的请求写入日志） 
 * 总体思路，先对 **config** 和 **serviceContext** 进行编写，去初始化服务的配置，和加入服务所需要用到的上下文，然后在编写中间件逻辑，因为中间件和后续的操作是解耦的，并不强关联，所以可以先编写中间件的逻辑，对请求进行处理或者一些其他的功能。最后是写 **logic** 的逻辑，来调用服务器上下文中的操作来处理请求（**rpc** 请求，数据库等）
 
+## 3. RPC 代码逻辑
+
+### 3.1 .proto 文件
+
+* .proto 文件时 rpc 代码的主体，通过该文件生成 rpc 的代码框架
+  *  `req message` 的结构体
+  * `resp message` 的结构体
+  * `rpc service`，其中包括了 **rpc function**，定义和 **handler** 的相似，api 调用的就是这个服务
+
+* 代码生成部分
+  * 会生成 message 对应的 go 格式的变量
+  * 生成 rpc service 的 go 格式的接口
+  * rpc 逻辑代码
+
+### 3.2 代码构成
+
+* **login** 的主体主要通过 logic 代码进行实现
+* **ServiceContext** 存放数据库的 `Model`，通过 RPC 操作数据库
+* **config** 文件中存放了 **jwt**，和 **mysql** 的 `DataSource`
+
+### 3.3 总结
+
+api 通过调用 rpc，使服务端处理数据库的一些操作，将对数据的操作即服务，全部放到服务器中，通过 rpc 来使服务器操作数据，这样 api 就不用获取数据库的连接，只让分布式的服务器去处理对应的服务。
+
+## 4. 整体逻辑思路总结
+
+* 首先 api 服务对应的是接受路由，然后通过路由进行转发操作调用 rpc 进行处理，目的是降低单一服务器的负载
+* rpc 相当处理具体的业务逻辑，为 api 进行负载均衡，api 既然叫 api 只是提供了服务处理的接口，实际处理是用过 api 调用 rpc 的远程服务器来进行处理
+* 实际的数据库的模型和一些不展示出来的接口，都放到服务器中，而不是使用 api 服务器进行处理， api 服务器只进行一些预处理，和对结果的处理
+* api 不涉及业务逻辑，只传递请求和返回请求的处理结果，middleware 也不涉及业务，只请求做一些预处理
+* rpc 才是设计到具体的业务处理内容
+
+## 5.各模块逻辑
+
+### 5.1 角色菜单管理
+
+* 问题
+
+  * roleId 和 userId 是对应的；但是我更新 roleId 的时候，**userId 对应的 redis 数据库并没有更新**
+
+  * userId 对应的**权限 url 没有写入 redis 中的代码**
+
+* 功能：
+
+  * redis 在哪更新：在 **userInfo 的 logic 中更新**，rpc 通过 role，role_menu，user_role，进行 join，然后获取 userId 对应的 url
+  * 这个 router 是在登陆进系统的时候会发起 **currentUser 这个请求**，用来更新当前 userId 的 url 权限
+
+* 逻辑，将每个菜单分配一个 id，通过这个 id 来对应访问权限
+  * 首先 rpc func 会将 RoleId 对应的记录删除
+  * 然后为 MenusIds 中的每个 MenuId 创建一条记录
+* 权限逻辑
+  * 首先用户又对应的 roleId，roleId 有权限映射（int，url）
+  * 用户在登陆的时候，会更新 redis 的权限，发起 currentUser 的 router 的请求
+  * 然后这个路由会通过 UserInfo 去使用 join 查询 userId 对应的 url
+  * 然后将结果更新到 redis，在后续访问的时候进行判断（checkUrl 默认跳过 currentUser 的 router 请求，还有其他的两个，selectAllData，queryMenuByRoleId）
+  * 后续的其他访问，都会使用 checkUrl 进行检查
+
+### 5.2 用户菜单管理
+
+#### 5.2.1 用户搜索
+
+* 包括用户的页面的所有内容，和单个搜索都是通过一个 **/user/list** 来进行获取的
+  * 在 api 中，req 字段使用 optional，这样传入的参数就编程可选的了
+  * 在 rpc 中调用 findAll 去获取
+  * 在 Mysql model 中，使用 where = ‘1=1’，来进行全体查询，如果有条件，再通过判断，进行 AND 拼接查询
+  * 
