@@ -548,3 +548,282 @@ type StringHeader struct {
 
 ### 3.3 反射
 
+#### 3.3.1 反射的基本类型与函数
+
+* 基本类型
+  * `reflect.Type`：反射获取的类型
+  * `reflect.Value`：反射获取的变量
+* 函数
+  * `reflect.TypeOf`：获取类型信息
+  * `reflect.ValueOf`：获取数据的运行时表示
+
+#### 3.3.2 Type
+
+* 接口，通过这个接口，可以获取类型信息相关的内容
+
+#### 3.3.3 Value
+
+* 结构体，没有对暴漏的字段
+
+#### 3.3.4 三大法则
+
+1. 从 `interface{}` 变量可以反射出反射对象；
+2. 从反射对象可以获取 `interface{}` 变量；
+3. 要修改反射对象，其值必须可设置；
+
+##### 3.3.4.1 第一法则
+
+* 能将 `interface{}` 类型的变量转换成反射对象；这需要从源码中获取，在参数传递的过程中，会发生一次隐式转换（形参是 interface{} 类型），转换成 `interface{}` 类型，再从 `interface{}` 类型转换成反射对象
+
+##### 3.3.4.2 第二法则
+
+* 反射对象转换成接口（使用 reflect.Value.Interface 进行转换，然后进行显示转换）
+
+- 从接口值到反射对象：
+
+  - 从基本类型到接口类型的类型转换；（形参的转换）
+  - 从接口类型到反射对象的转换；（转换函数内部）
+
+- 从反射对象到接口值：
+
+  - 反射对象转换成接口类型；（转换成接口）
+
+  - 通过显式类型转换变成原始类型；（将接口类型显示转换）
+
+    ```go
+    v := reflect.ValueOf(1)
+    v.Interface().(int)
+    ```
+
+##### 3.3.4.3 第三法则
+
+* 反射变量如果重设值，转换成反射对象的时候，这个源对象的值必须是可以更改的（传入指针）
+
+1. 调用 `reflect.ValueOf` 获取变量指针；
+2. 调用 `reflect.Value.Elem` 获取指针指向的变量；
+3. 调用 `reflect.Value.SetInt` 更新变量的值：
+
+#### 3.3.5 更新变量
+
+* 更新 value 的时候，需要调用 reflect.Value.Set 更新对象
+  * `reflect.flag.mustBeAssignable` ：检查当前反射对象是否是可以被设置的
+  * `reflect.flag.mustBeExported` ：检查字段是否是对外公开的
+
+#### 3.3.6 实现协议
+
+* `reflect.rtype.Implements` 可以判断某些类型是否遵循特定的接口
+
+  ```go
+  type CustomError struct{}
+  
+  func (*CustomError) Error() string {
+  	return ""
+  }
+  
+  func main() {
+  	typeOfError := reflect.TypeOf((*error)(nil)).Elem()   // 一个*error 的类型
+  	customErrorPtr := reflect.TypeOf(&CustomError{})
+  	customError := reflect.TypeOf(CustomError{})
+  
+  	fmt.Println(customErrorPtr.Implements(typeOfError)) // #=> true
+  	fmt.Println(customError.Implements(typeOfError)) // #=> false
+  }
+  ```
+
+  * `CustomError` 类型并没有实现 `error` 接口；
+  * `*CustomError` 指针类型实现了 `error` 接口；
+
+#### 3.3.7 方法调用
+
+* 通过获取函数的类型，以及函数的入参等信息，进行动态调用
+
+  ```go
+  func Add(a, b int) int { return a + b }
+  
+  func main() {
+  	v := reflect.ValueOf(Add)
+  	if v.Kind() != reflect.Func {
+  		return
+  	}
+  	t := v.Type()
+  	argv := make([]reflect.Value, t.NumIn())
+  	for i := range argv {
+  		if t.In(i).Kind() != reflect.Int {
+  			return
+  		}
+  		argv[i] = reflect.ValueOf(i)
+  	}
+  	result := v.Call(argv)
+  	if len(result) != 1 || result[0].Kind() != reflect.Int {
+  		return
+  	}
+  	fmt.Println(result[0].Int()) // #=> 1
+  }
+  ```
+
+  * 通过 `reflect.ValueOf` 获取函数 `Add` 对应的反射对象；
+  * 调用 `reflect.rtype.NumIn` 获取函数的入参个数；
+  * 多次调用 `reflect.ValueOf` 函数逐一设置 `argv` 数组中的各个参数；
+  * 调用反射对象 `Add` 的 `reflect.Value.Call` 方法并传入参数列表；
+  * 获取返回值数组、验证数组的长度以及类型并打印其中的数据；
+
+## 4. 常用关键字
+
+### 4.1 for 和 range
+
+**for 和 range 在编译时都会转换成其他代码进行优化，同时这两个都会拷贝一个传入的副本**
+
+* 哈希表会进行随机遍历，每次遍历结果不同，go 底层实现哈希表就不是让顺序遍历的
+
+#### 4.1.1 经典循环
+
+* 经典循环的节点由四个部分组成
+
+  * 初始化循环的 `Ninit`；
+  * 循环的继续条件 `Left`；
+  * 循环体结束时执行的 `Right`；
+  * 循环体 `NBody`：
+
+  ```go
+  for Ninit; Left; Right {
+      NBody
+  }
+  ```
+
+  ![image-20231114191911246](..\..\CPPStudy\src\image-20231114191911246.png)
+
+#### 4.1.2 范围循环
+
+* 针对数组和切片会出现的三种情况
+
+  * 分析遍历数组和切片清空元素的情况；
+  * 分析使用 `for range a {}` 遍历数组和切片，不关心索引和数据的情况；
+  * 分析使用 `for i := range a {}` 遍历数组和切片，只关心索引的情况；
+  * 分析使用 `for i, elem := range a {}` 遍历数组和切片，关心索引和数据的情况；
+
+* `arrayClear` 优化
+
+  ```go
+  // 原代码
+  for i := range a {
+  	a[i] = zero
+  }
+  
+  // 优化后,清除原数组的内存
+  if len(a) != 0 {
+  	hp = &a[0]
+  	hn = len(a)*sizeof(elem(a))
+  	memclrNoHeapPointers(hp, hn)
+  	i = len(a) - 1
+  }
+  ```
+
+* 同时关注数据和索引，会触发**拷贝**
+
+  ```go
+  ha := a
+  hv1 := 0
+  hn := len(ha)
+  v1 := hv1
+  v2 := nil
+  for ; hv1 < hn; hv1++ {
+      tmp := ha[hv1]
+      v1, v2 = hv1, tmp
+      ...
+  }
+  ```
+
+* 遍历**哈希表**，会随机获取桶
+  * 哈希表遍历的顺序，首先会选出一个绿色的正常桶开始遍历，随后遍历所有黄色的溢出桶，最后依次按照索引顺序遍历哈希表中其他的桶，直到所有的桶都被遍历完成。
+  * 在待遍历的桶为空时，选择需要遍历的新桶；
+  * 在不存在待遍历的桶时。返回 `(nil, nil)` 键值对并中止遍历；
+* 遍历**通道**
+  * 如果不存在当前值，意味着当前的管道已经被关闭；
+  * 如果存在当前值，会为 `v1` 赋值并清除 `hv1` 变量中的数据，然后重新陷入阻塞等待新数据；
+
+### 4.2 select
+
+**select 会先扫一遍所有的 case ，来快速确定当前是否有可以在执行的，没有的话优化代码，使用轮询的方法去监控通道**
+
+* `select` 的 `case` 中的表达式必须都是 `channel` 的收发操作
+
+#### 4.2.1 现象
+
+1. `select` 能在 `Channel` 上进行非阻塞的收发操作；
+2. `select` 在遇到多个 `Channel` 同时响应时，会随机执行一种情况；
+
+**非阻塞收发**
+
+* 两种情况，优先处理 `case` 的可收发，无则初始 `default`
+  * 当存在可以收发的 `Channel` 时，直接处理该 `Channel` 对应的 `case`；
+  * 当不存在可以收发的 `Channel` 时，执行 `default` 中的语句；
+
+**随机执行**
+
+* 随机的目的，防止饥饿
+
+#### 4.2.2 数据结构
+
+```go
+type scase struct {
+	c    *hchan         // chan
+	elem unsafe.Pointer // data element
+}
+```
+
+#### 4.2.3 实现原理
+
+1. `select` 不存在任何的 `case`；
+2. `select` 只存在一个 `case`；
+3. `select` 存在两个 `case`，其中一个 `case` 是 `default`；
+4. `select` 存在多个 `case`；
+
+* 直接阻塞
+  * 不包含 `case` 的情况
+* 单一管道
+  * 会改写成 `if` 语句
+* 非阻塞操作（defer）
+  * 发送
+    * 使用条件语句和 `selectnbsend(ch, i)` 进行改写
+  * 接收
+    * 使用条件语句和 `selectnbrecv(&v, ch)` 进行改写
+* 多个，通过 `if` 找出符合的 `case`
+* 多个 `case` 但没有 `default` 的情况
+  * 轮询顺序：通过 [`runtime.fastrandn`](https://draveness.me/golang/tree/runtime.fastrandn) 函数引入随机性；
+  * 加锁顺序：按照 Channel 的地址排序后确定加锁顺序；
+  * 通过 goto 跳转执行语句
+
+### 4.3 defer
+
+**defer 通过头插的链式进行存储，调用会调用最后插入的那个，即链头的 defer；defer 中设计底层的栈指针和程序计数器等**
+
+#### 4.3.1 现象
+
+- `defer` 关键字的调用时机以及多次调用 `defer` 时执行顺序是如何确定的；
+  - 链式头插，从头执行
+- `defer` 关键字使用传值的方式传递参数时会进行预计算，导致不符合预期的结果；
+  - 预计算参数，在写这个 `func` 的时候，就确定了传入的参数内容了
+
+#### 4.3.2 执行机制
+
+* 栈上执行
+* 堆上执行
+* 开放编码
+  * 函数的 `defer` 数量少于或者等于 8 个；
+  * 函数的 `defer` 关键字不能在循环中执行；
+  * 函数的 `return` 语句与 `defer` 语句的乘积小于或者等于 15 个；
+
+### 4.4 panic 和 recover
+
+**panic 触发的递归延迟调用，在 defer 终止 panic 造成的程序崩溃**
+
+- `panic` 只会触发当前 Goroutine 的 `defer`；
+- `recover` 只有在 `defer` 中调用才会生效；
+- `panic` 允许在 `defer` 中嵌套多次调用；
+
+* `panic` 可以嵌套崩溃
+
+### 4.5 make 和 new
+
+- `make` 的作用是初始化内置的数据结构，也就是我们在前面提到的切片、哈希表和 Channel[2](https://draveness.me/golang/docs/part2-foundation/ch05-keyword/golang-make-and-new/#fn:2)；
+- `new` 的作用是根据传入的类型分配一片内存空间并返回指向这片内存空间的指针[3](https://draveness.me/golang/docs/part2-foundation/ch05-keyword/golang-make-and-new/#fn:3)；
