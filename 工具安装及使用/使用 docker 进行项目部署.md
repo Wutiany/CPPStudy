@@ -145,6 +145,8 @@ COPY --from=builder /app/etc /app/etc
 CMD ["./ums", "-f", "etc/ums_docker.yaml"]
 ```
 
+* 出现 `apk` 不能执行的问题，在 `docker build` 的时候加入 `--network host`，是镜像访问网络
+
 #### 2.2 mysql 的 dockerfile 编写
 
 ``` dockerfile

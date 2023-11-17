@@ -1,0 +1,65 @@
+GENCODE = true
+
+ifeq ($(GENCODE), true)
+	TARGET := generation
+else
+	TARGET := build
+endif
+
+
+.PHONY: run
+run: $(TARGET)
+
+.PHONY: generation
+generation:
+	goctl model mysql datasource -url "root:wutianyu@tcp(127.0.0.1:8306)/ums" -table "product*" -dir rpc/model/prodcutmodel
+	goctl model mysql datasource -url "root:wutianyu@tcp(127.0.0.1:8306)/ums" -table "menu*" -dir rpc/model/menumodel
+	goctl model mysql datasource -url "root:wutianyu@tcp(127.0.0.1:8306)/ums" -table "order*" -dir rpc/model/ordermodel
+	goctl model mysql datasource -url "root:wutianyu@tcp(127.0.0.1:8306)/ums" -table "role*" -dir rpc/model/rolemodel
+	goctl model mysql datasource -url "root:wutianyu@tcp(127.0.0.1:8306)/ums" -table "user*" -dir rpc/model/usermodel
+
+	cd api && goctl api go -api ./doc/ums.api -dir .
+
+	cd rpc/menu && goctl rpc protoc menu.proto --go_out ./ --go-grpc_out ./ --zrpc_out . -m
+	cd rpc/order && goctl rpc protoc order.proto --go_out ./ --go-grpc_out ./ --zrpc_out . -m
+	cd rpc/product && goctl rpc protoc product.proto --go_out ./ --go-grpc_out ./ --zrpc_out . -m
+	cd rpc/role && goctl rpc protoc role.proto --go_out ./ --go-grpc_out ./ --zrpc_out . -m
+	cd rpc/user && goctl rpc protoc user.proto --go_out ./ --go-grpc_out ./ --zrpc_out . -m
+
+.PHONY: build
+build:
+	docker stop menu
+	docker stop order
+	docker stop product
+	docker stop role
+	docker stop user
+	docker stop mysql
+	docker stop api
+
+	docker rm menu
+	docker rm order
+	docker rm product
+	docker rm role
+	docker rm user
+	docker rm mysql
+	docker rm api
+
+	docker rmi menu:v1
+	docker rmi order:v1
+	docker rmi product:v1
+	docker rmi role:v1
+	docker rmi user:v1
+	docker rmi mysql:v1
+	docker rmi api:v1
+
+	docker rmi $(docker images | grep "none" | awk '{print $3}')
+
+	docker build -t menu:v1 -f rpc/menu/Dockerfile .
+	docker build -t order:v1 -f rpc/order/Dockerfile .
+	docker build -t product:v1 -f rpc/product/Dockerfile .
+	docker build -t role:v1 -f rpc/role/Dockerfile .
+	docker build -t user:v1 -f rpc/user/Dockerfile .
+	docker build -t mysql:v1 -f rpc/mysql/Dockerfile .
+	docker build -t api:v1 -f rpc/api/Dockerfile .
+
+	docker-compose -f /dev/docker-compose.yaml up -d

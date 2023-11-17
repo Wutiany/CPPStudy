@@ -1,0 +1,27 @@
+DELETE = true
+
+ifeq ($(DELETE), true)
+	TARGET := delete
+else
+	TARGET := build
+endif
+
+.PHONY: run
+run: $(TARGET)
+
+
+.PHONY: delete
+delete:
+	docker stop trainee
+	docker rm trainee
+	docker rmi trainee:v1
+	swag init -g .\cmd\main.go
+	docker build --network host -t trainee:v1 -f ./Dockerfile .
+	docker-compose up -d
+
+.PHONY: build
+build:
+	swag init -g .\cmd\main.go
+	docker build --network host -t trainee:v1 -f ./Dockerfile .
+	docker-compose up -d
+#	docker start trainee -d
