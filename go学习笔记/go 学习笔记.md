@@ -825,5 +825,5 @@ type scase struct {
 
 ### 4.5 make 和 new
 
-- `make` 的作用是初始化内置的数据结构，也就是我们在前面提到的切片、哈希表和 Channel[2](https://draveness.me/golang/docs/part2-foundation/ch05-keyword/golang-make-and-new/#fn:2)；
-- `new` 的作用是根据传入的类型分配一片内存空间并返回指向这片内存空间的指针[3](https://draveness.me/golang/docs/part2-foundation/ch05-keyword/golang-make-and-new/#fn:3)；
+- `make` 的作用是初始化内置的数据结构，也就是我们在前面提到的切片、哈希表和 Channel
+- `new` 的作用是根据传入的类型分配一片内存空间并返回指向这片内存空间的指针

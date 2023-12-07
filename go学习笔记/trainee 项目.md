@@ -46,7 +46,7 @@
 * 安装 `gin-swagger`
 
   ```shell
-  go get -u github.com/swaggo/gin-swagger
+  $ go get -u github.com/swaggo/gin-swagger
   ```
 
 ### 2.2 编写文档
