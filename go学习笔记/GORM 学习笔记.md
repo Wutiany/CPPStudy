@@ -509,6 +509,10 @@ sqlDB.SetConnMaxLifetime(time.Hour)
   
   DB.Session(&gorm.Session{SkipHooks: true}).CreateInBatches(users, 100)
   ```
+  
+* 查询 `Hook`：**AfterFind**，同样是结构体的方法
+
+* 更新 `Hook`：**BeforeUpdate**
 
 ### 1.3.3 查询
 
@@ -743,7 +747,9 @@ sqlDB.SetConnMaxLifetime(time.Hour)
   // SELECT * FROM users WHERE name = 'jinzhu' OR (name = 'jinzhu 2' AND age = 18);
   ```
 
-### 1.3.5 选择特定字段
+### 1.3.5 常用操作
+
+#### 1.3.5.1 选择特定字段（select）
 
 * **Select 语句**，同时可以使用 **SQL 的函数**
 
@@ -758,7 +764,7 @@ sqlDB.SetConnMaxLifetime(time.Hour)
   // SELECT COALESCE(age,'42') FROM users;
   ```
 
-### 1.3.6 排序（Order by）
+#### 1.3.5.2 排序（Order by）
 
 * string 表示，或者多个，或者按照字段 id 来
 
@@ -778,7 +784,7 @@ sqlDB.SetConnMaxLifetime(time.Hour)
 
   * ORDER BY FIELD(id, 1, 2, 3) 是用于指定按照特定顺序对结果进行排序。在这个例子中，id 是用于排序的列名
 
-### 1.3.7 Limit & Offset
+#### 1.3.5.3 Limit & Offset
 
 * `Offset`是一个用于分页查询的参数，在查询结果中指定要跳过的记录数量，以便从指定位置开始返回记录。通过结合使用`Limit`和`Offset`，可以实现有效的分页功能，以便在大型数据集中按需获取数据。
 
@@ -806,7 +812,7 @@ sqlDB.SetConnMaxLifetime(time.Hour)
   * `Offset(-1), Limit(-1)` 为取消
   * `Offset` 不能超过查询出来的所有记录的数量
 
-### 1.3.8 Group By & Having
+#### 1.3.5.4 Group By & Having
 
 * `Group By` 和 `Having` 相当于 `GORM` 自己添加这个关键字，然后附带上函数中的参数作为条件
 
@@ -847,7 +853,7 @@ sqlDB.SetConnMaxLifetime(time.Hour)
   * `rows` 需要 `close`，不然占用数据库连接池的连接
   * `rows` 必须先 `Next`，移动游标才行
 
-### 1.3.9 Distinct
+#### 1.3.5.5 Distinct
 
 * 结果去重
 
@@ -857,7 +863,7 @@ sqlDB.SetConnMaxLifetime(time.Hour)
 
 `Distinct`也可以与`Pluck`和`Count`一起使用
 
-### 1.3.10 Joins
+#### 1.3.5.6 Joins
 
 **Joins**
 
@@ -885,7 +891,7 @@ sqlDB.SetConnMaxLifetime(time.Hour)
 
 **Joins 预加载**
 
-* Joins
+* Joins：一次性加载关联数据
 
   ```go
   db.Joins("Company").Find(&users)
@@ -896,7 +902,805 @@ sqlDB.SetConnMaxLifetime(time.Hour)
   // SELECT `users`.`id`,`users`.`name`,`users`.`age`,`Company`.`id` AS `Company__id`,`Company`.`name` AS `Company__name` FROM `users` INNER JOIN `companies` AS `Company` ON `users`.`company_id` = `Company`.`id`;
   ```
 
-* 
+* 附带条件
+
+  ```go
+  db.Joins("Company", db.Where(&Company{Alive: true})).Find(&users)
+  // SELECT `users`.`id`,`users`.`name`,`users`.`age`,`Company`.`id` AS `Company__id`,`Company`.`name` AS `Company__name` FROM `users` LEFT JOIN `companies` AS `Company` ON `users`.`company_id` = `Company`.`id` AND `Company`.`alive` = true;
+  ```
+
+**Joins 一个衍生表**
+
+```go
+type User struct {
+    Id  int
+    Age int
+}
+
+type Order struct {
+    UserId     int
+    FinishedAt *time.Time
+}
+
+query := db.Table("order").Select("MAX(order.finished_at) as latest").Joins("left join user user on order.user_id = user.id").Where("user.age > ?", 18).Group("order.user_id")
+db.Model(&Order{}).Joins("join (?) q on order.finished_at = q.latest", query).Scan(&results)
+// SELECT `order`.`user_id`,`order`.`finished_at` FROM `order` join (SELECT MAX(order.finished_at) as latest FROM `order` left join user user on order.user_id = user.id WHERE user.age > 18 GROUP BY `order`.`user_id`) q on order.finished_at = q.latest
+```
+
+#### 1.3.5.7 Scan
+
+* Scan 用来将结果存入结构体中，需要传入**模型的结构体指针**
+
+  ```go
+  type Result struct {
+    Name string
+    Age  int
+  }
+  
+  var result Result
+  db.Table("users").Select("name", "age").Where("name = ?", "Antonio").Scan(&result)
+  
+  // Raw SQL
+  db.Raw("SELECT name, age FROM users WHERE name = ?", "Antonio").Scan(&result)
+  ```
+
+  * `Raw` 等于 `sql` 的 `Query`，直接执行查询语句
+
+### 1.3.6 高级查询
+
+#### 1.3.6.1 智能选取字段
+
+**通过创建带有特定字段的结构体，来限制 select 查询的字段**
+
+```go
+type User struct {
+  ID     uint
+  Name   string
+  Age    int
+  Gender string
+  // 假设后面还有几百个字段...
+}
+
+type APIUser struct {
+  ID   uint
+  Name string
+}
+
+// 查询时会自动选择 `id`, `name` 字段
+db.Model(&User{}).Limit(10).Find(&APIUser{})
+// SELECT `id`, `name` FROM `users` LIMIT 10
+```
+
+* 失效情况：在 `gorm` 配置成 **QueryFields** 的时候，会查询**全部字段**，两种设置
+
+  * 全局设置
+
+    ```go
+    db, err := gorm.Open(sqlite.Open("gorm.db"), &gorm.Config{
+      QueryFields: true,
+    })
+    ```
+
+  * 单个 `session` 设置
+
+    ```go
+    db.Session(&gorm.Session{QueryFields: true}).Find(&user)
+    ```
+
+#### 1.3.6.2 Locking 多种锁（For Update）
+
+* 使用 Clauses（子句）来设置：相当于在 sql 语句中加不同的锁，通过 `clause.Locking`
+
+  ```go
+  db.Clauses(clause.Locking{Strength: "UPDATE"}).Find(&users)
+  // SELECT * FROM `users` FOR UPDATE
+  
+  db.Clauses(clause.Locking{
+    Strength: "SHARE",
+    Table: clause.Table{Name: clause.CurrentTable},
+  }).Find(&users)
+  // SELECT * FROM `users` FOR SHARE OF `users`
+  
+  db.Clauses(clause.Locking{
+    Strength: "UPDATE",
+    Options: "NOWAIT",
+  }).Find(&users)
+  // SELECT * FROM `users` FOR UPDATE NOWAIT
+  ```
+
+  * `Locking` 结构体用来设置子查询的锁设置
+
+#### 1.3.6.3 子查询
+
+**支持子查询嵌套，通过占位符来捕获 *gorm.DB 的子查询**
+
+* **嵌套子查询**
+
+  ```go
+  db.Where("amount > (?)", db.Table("orders").Select("AVG(amount)")).Find(&orders)
+  // SELECT * FROM "orders" WHERE amount > (SELECT AVG(amount) FROM "orders");
+  
+  subQuery := db.Select("AVG(age)").Where("name LIKE ?", "name%").Table("users")
+  db.Select("AVG(age) as avgage").Group("name").Having("AVG(age) > (?)", subQuery).Find(&results)
+  // SELECT AVG(age) as avgage FROM `users` GROUP BY `name` HAVING AVG(age) > (SELECT AVG(age) FROM `users` WHERE name LIKE "name%")	
+  ```
+
+* **`From` 子查询**：`Table` 方法支持 `FROM` 子查询，通过占位符来获取
+
+  ```go
+  db.Table("(?) as u", db.Model(&User{}).Select("name", "age")).Where("age = ?", 18).Find(&User{})
+  // SELECT * FROM (SELECT `name`,`age` FROM `users`) as u WHERE `age` = 18
+  
+  subQuery1 := db.Model(&User{}).Select("name")
+  subQuery2 := db.Model(&Pet{}).Select("name")
+  db.Table("(?) as u, (?) as p", subQuery1, subQuery2).Find(&User{})
+  // SELECT * FROM (SELECT `name` FROM `users`) as u, (SELECT `name` FROM `pets`) as p
+  ```
+
+#### 1.3.6.4 Group 条件
+
+* 将 Where 的条件进行分组，相当于**加括号**
+
+```go
+db.Where(
+    db.Where("pizza = ?", "pepperoni").Where(db.Where("size = ?", "small").Or("size = ?", "medium")),
+).Or(
+    db.Where("pizza = ?", "hawaiian").Where("size = ?", "xlarge"),
+).Find(&Pizza{}).Statement
+
+// SELECT * FROM `pizzas` WHERE (pizza = "pepperoni" AND (size = "small" OR size = "medium")) OR (pizza = "hawaiian" AND size = "xlarge")
+```
+
+#### 1.3.6.5 带多个列的 IN
+
+* 等于占位符所替代的是一个 `[][]interface{}{初始化}`
+
+#### 1.3.6.6 命名参数
+
+* 支持 `sql,NamedArg` 和 `map[string]interface{}{}` 形式的命名参数
+
+  ```go
+  db.Where("name1 = @name OR name2 = @name", sql.Named("name", "jinzhu")).Find(&user)
+  // SELECT * FROM `users` WHERE name1 = "jinzhu" OR name2 = "jinzhu"
+  
+  db.Where("name1 = @name OR name2 = @name", map[string]interface{}{"name": "jinzhu"}).First(&user)
+  // SELECT * FROM `users` WHERE name1 = "jinzhu" OR name2 = "jinzhu" ORDER BY `users`.`id` LIMIT 1
+  ```
+
+#### 1.3.6.7 Find 至 map
+
+* 不用定义结构体，将结果映射到 `map` 中
+  * 单条记录：`map[string]interface{}`
+  * 多条记录：`[]map[string]interface{}`
+
+#### 1.3.6.8 FirstOrInit 未找到根据条件初始化
+
+* 通过结构体或者 `map` 去设置条件
+
+  ```go
+  // 未找到 user，则根据给定的条件初始化一条记录
+  db.FirstOrInit(&user, User{Name: "non_existing"})
+  // user -> User{Name: "non_existing"}
+  
+  // 找到了 `name` = `jinzhu` 的 user
+  db.Where(User{Name: "jinzhu"}).FirstOrInit(&user)
+  // user -> User{ID: 111, Name: "Jinzhu", Age: 18}
+  
+  // 找到了 `name` = `jinzhu` 的 user
+  db.FirstOrInit(&user, map[string]interface{}{"name": "jinzhu"})
+  // user -> User{ID: 111, Name: "Jinzhu", Age: 18}
+  ```
+
+  * **Attrs** 用更多的属性进行初始化结构体（不会生成查询 SQL）
+
+    ```go
+    // 未找到 user，则根据给定的条件以及 Attrs 初始化 user
+    db.Where(User{Name: "non_existing"}).Attrs(User{Age: 20}).FirstOrInit(&user)
+    // SELECT * FROM USERS WHERE name = 'non_existing' ORDER BY id LIMIT 1;
+    // user -> User{Name: "non_existing", Age: 20}
+    
+    // 未找到 user，则根据给定的条件以及 Attrs 初始化 user
+    db.Where(User{Name: "non_existing"}).Attrs("age", 20).FirstOrInit(&user)
+    // SELECT * FROM USERS WHERE name = 'non_existing' ORDER BY id LIMIT 1;
+    // user -> User{Name: "non_existing", Age: 20}
+    
+    // 找到了 `name` = `jinzhu` 的 user，则忽略 Attrs
+    db.Where(User{Name: "Jinzhu"}).Attrs(User{Age: 20}).FirstOrInit(&user)
+    // SELECT * FROM USERS WHERE name = jinzhu' ORDER BY id LIMIT 1;
+    // user -> User{ID: 111, Name: "Jinzhu", Age: 18}
+    ```
+
+  * `Assign` **不管是否**找到记录，都会将属性赋给 `struct`
+
+    ```go
+    // 未找到 user，根据条件和 Assign 属性初始化 struct
+    db.Where(User{Name: "non_existing"}).Assign(User{Age: 20}).FirstOrInit(&user)
+    // user -> User{Name: "non_existing", Age: 20}
+    
+    // 找到 `name` = `jinzhu` 的记录，依然会更新 Assign 相关的属性
+    db.Where(User{Name: "Jinzhu"}).Assign(User{Age: 20}).FirstOrInit(&user)
+    // SELECT * FROM USERS WHERE name = jinzhu' ORDER BY id LIMIT 1;
+    // user -> User{ID: 111, Name: "Jinzhu", Age: 20}
+    ```
+
+* 实际就是没找到的话，创建一个不存在的，同时不会对数据库进行操作（不存在的不会创建到数据库中）
+
+#### 1.3.6.9 FirstOrCreate
+
+* 获取匹配的第一条记录或者根据给定条件创建一条新纪录，`RowsAffected` 返回创建、更新的记录数
+  * **Attrs**：没找到记录则创建但不会生成 SQL 语句，找到了则忽略
+  * **Assign**：不管找没找到，都将属性赋值给 `struct` 同时**写回**数据库
+
+#### 1.3.6.10 优化器、索引提示
+
+* 优化器（gorm.io/hints）：优化器提示用来控制查询优化器选择某个查询执行计划
+
+  ```go
+  import "gorm.io/hints"
+  
+  db.Clauses(hints.New("MAX_EXECUTION_TIME(10000)")).Find(&User{})
+  // SELECT * /*+ MAX_EXECUTION_TIME(10000) */ FROM `users`
+  ```
+
+* 索引提示：传递索引提示到数据库，防止查询计划器出现混乱（允许你在查询中向数据库传递一些提示信息，以帮助查询优化器生成更好的查询计划）
+
+  ```go
+  import "gorm.io/hints"
+  
+  db.Clauses(hints.UseIndex("idx_user_name")).Find(&User{})
+  // SELECT * FROM `users` USE INDEX (`idx_user_name`)
+  
+  db.Clauses(hints.ForceIndex("idx_user_name", "idx_user_id").ForJoin()).Find(&User{})
+  // SELECT * FROM `users` FORCE INDEX FOR JOIN (`idx_user_name`,`idx_user_id`)"
+  ```
+
+#### 1.3.6.11 迭代（火山模型）
+
+* 返回多行数据，使用 `Rows.Next()`，和 `sql` 库相同
+
+#### 1.3.6.12 FindInBatches 批量查询并处理记录
+
+* 在 FindInBatches 中设置批量以及对应**处理函数**，来对查询的**记录进行处理**
+
+  ```go
+  // 每次批量处理 100 条
+  result := db.Where("processed = ?", false).FindInBatches(&results, 100, func(tx *gorm.DB, batch int) error {
+    for _, result := range results {
+      // 批量处理找到的记录
+    }
+  
+    tx.Save(&results)
+  
+    tx.RowsAffected // 本次批量操作影响的记录数
+  
+    batch // Batch 1, 2, 3
+  
+    // 如果返回错误会终止后续批量操作
+    return nil
+  })
+  
+  result.Error // returned error
+  result.RowsAffected // 整个批量操作影响的记录数
+  ```
+
+#### 1.3.6.13 查询钩子
+
+* **AfterFind**：同样是结构体的方法
+
+#### 1.3.6.14 Pluck 查询单个列
+
+* 使用 `Pluck` 方法，传入一个存储单列结果的 `slice`
+
+#### 1.3.6.15 Scope 指定常用查询
+
+* 提前定义好查询语句（封装），然后将函数作为 `Scopes` 的参数，让 `Scopes`进行调用，等于**语句复用**
+
+  ```go
+  func AmountGreaterThan1000(db *gorm.DB) *gorm.DB {
+    return db.Where("amount > ?", 1000)
+  }
+  
+  func PaidWithCreditCard(db *gorm.DB) *gorm.DB {
+    return db.Where("pay_mode_sign = ?", "C")
+  }
+  
+  func PaidWithCod(db *gorm.DB) *gorm.DB {
+    return db.Where("pay_mode_sign = ?", "C")
+  }
+  
+  func OrderStatus(status []string) func (db *gorm.DB) *gorm.DB {
+    return func (db *gorm.DB) *gorm.DB {
+      return db.Where("status IN (?)", status)
+    }
+  }
+  
+  db.Scopes(AmountGreaterThan1000, PaidWithCreditCard).Find(&orders)
+  // 查找所有金额大于 1000 的信用卡订单
+  
+  db.Scopes(AmountGreaterThan1000, PaidWithCod).Find(&orders)
+  // 查找所有金额大于 1000 的货到付款订单
+  
+  db.Scopes(AmountGreaterThan1000, OrderStatus([]string{"paid", "shipped"})).Find(&orders)
+  // 查找所有金额大于 1000 且已付款或已发货的订单
+  ```
+
+#### 1.3.6.16 Count
+
+* 用于获得获取匹配的记录数
+
+### 1.3.4 更新
+
+#### 1.3.4.1 保存所有字段（Save）
+
+* `Save` 方法回保存**所有字段**，即使字段是零值
+
+#### 1.3.4.2 更新单个列
+
+* 指定 `Model`，然后直接使用 `update` 进行 `kv` 形式的更新
+
+  ```go
+  // Update with conditions
+  db.Model(&User{}).Where("active = ?", true).Update("name", "hello")
+  // UPDATE users SET name='hello', updated_at='2013-11-17 21:34:10' WHERE active=true;
+  
+  // User's ID is `111`:
+  db.Model(&user).Update("name", "hello")
+  // UPDATE users SET name='hello', updated_at='2013-11-17 21:34:10' WHERE id=111;
+  
+  // Update with conditions and model value
+  db.Model(&user).Where("active = ?", true).Update("name", "hello")
+  // UPDATE users SET name='hello', updated_at='2013-11-17 21:34:10' WHERE id=111 AND active=true;
+  ```
+
+  * 多个条件，Model 可以使用附加条件（在结构体中）
+
+#### 1.3.4.3 更新多个列
+
+* 使用 `Updates`，传入模型的结构体（为更新的字段显示设置值）或者使用 `map[string]interface{}`
+
+* 更新**选定字段**和**更新多列相同**
+
+#### 1.3.4.4 批量更新
+
+* 带有**非主键条件（非唯一条件）**，则批量更新
+
+#### 1.3.4.5 阻止全局更新（安全措施）
+
+* 不设定主键条件，或者产生更新所有记录的语句，都会产生 `ErrMissingWhereClause` 的错误
+* 想要进行全局更新，需要通过对 Session 设置 `AllowGlobalUpdate` 来进行操作
+
+```go
+db.Model(&User{}).Update("name", "jinzhu").Error // gorm.ErrMissingWhereClause
+
+db.Model(&User{}).Where("1 = 1").Update("name", "jinzhu")
+// UPDATE users SET `name` = "jinzhu" WHERE 1=1
+
+db.Exec("UPDATE users SET name = ?", "jinzhu")
+// UPDATE users SET name = "jinzhu"
+
+db.Session(&gorm.Session{AllowGlobalUpdate: true}).Model(&User{}).Update("name", "jinzhu")
+// UPDATE users SET `name` = "jinzhu"
+```
+
+#### 1.3.4.6 更新的记录数
+
+* 通过 `Result.RowsAffected` 查看
+
+#### 1.3.4.7 使用 SQL 表达式更新
+
+* 通过表达式更新一个列（gorm.Expr），相当于将表达式嵌入到 `SQL` 语句中
+
+  ```go
+  // product's ID is `3`
+  db.Model(&product).Update("price", gorm.Expr("price * ? + ?", 2, 100))
+  // UPDATE "products" SET "price" = price * 2 + 100, "updated_at" = '2013-11-17 21:34:10' WHERE "id" = 3;
+  
+  db.Model(&product).Updates(map[string]interface{}{"price": gorm.Expr("price * ? + ?", 2, 100)})
+  // UPDATE "products" SET "price" = price * 2 + 100, "updated_at" = '2013-11-17 21:34:10' WHERE "id" = 3;
+  
+  db.Model(&product).UpdateColumn("quantity", gorm.Expr("quantity - ?", 1))
+  // UPDATE "products" SET "quantity" = quantity - 1 WHERE "id" = 3;
+  
+  db.Model(&product).Where("quantity > 1").UpdateColumn("quantity", gorm.Expr("quantity - ?", 1))
+  // UPDATE "products" SET "quantity" = quantity - 1 WHERE "id" = 3 AND quantity > 1;
+  ```
+
+* 通过表达式和上下文值来创建（对特定的字段调用表达式：clause.Expr），字段结构体自带的 GormValue 方法，来获取表达式
+
+  ```go
+  // Create from customized data type
+  type Location struct {
+      X, Y int
+  }
+  
+  func (loc Location) GormValue(ctx context.Context, db *gorm.DB) clause.Expr {
+    return clause.Expr{
+      SQL:  "ST_PointFromText(?)",
+      Vars: []interface{}{fmt.Sprintf("POINT(%d %d)", loc.X, loc.Y)},
+    }
+  }
+  
+  db.Model(&User{ID: 1}).Updates(User{
+    Name:  "jinzhu",
+    Location: Location{X: 100, Y: 100},
+  })
+  // UPDATE `user_with_points` SET `name`="jinzhu",`location`=ST_PointFromText("POINT(100 100)") WHERE `id` = 1
+  ```
+
+* 综合就是 `Updates` 会先查找更新的结构体字段是否有 `GormValue` 方法，有的话，会将内容嵌入到 `SQL` 语句中
+
+#### 1.3.4.8 子查询嵌套更新
+
+* 等同于 `updates` 的赋值，是通过子查询获取的内容（即子查询会返回一个结果）
+
+  ```go
+  db.Model(&user).Update("company_name", db.Model(&Company{}).Select("name").Where("companies.id = users.company_id"))
+  // UPDATE "users" SET "company_name" = (SELECT name FROM companies WHERE companies.id = users.company_id);
+  
+  db.Table("users as u").Where("name = ?", "jinzhu").Update("company_name", db.Table("companies as c").Select("name").Where("c.id = u.company_id"))
+  
+  db.Table("users as u").Where("name = ?", "jinzhu").Updates(map[string]interface{}{"company_name": db.Table("companies as c").Select("name").Where("c.id = u.company_id")})
+  ```
+
+#### 1.3.4.9 不使用 Hook 和时间追踪
+
+* 使用 `UpdateColumn` 和 `UpdateColumns` 方法，与 `Update` 和 `Updates` 类似
+
+#### 1.3.4.10 返回修改行的数据
+
+* 使用 `Clauses` 子查询，使用 `clause.Returning{}` 参数 
+
+  ```go
+  // return all columns
+  var users []User
+  db.Model(&users).Clauses(clause.Returning{}).Where("role = ?", "admin").Update("salary", gorm.Expr("salary * ?", 2))
+  // UPDATE `users` SET `salary`=salary * 2,`updated_at`="2021-10-28 17:37:23.19" WHERE role = "admin" RETURNING *
+  // users => []User{{ID: 1, Name: "jinzhu", Role: "admin", Salary: 100}, {ID: 2, Name: "jinzhu.2", Role: "admin", Salary: 1000}}
+  
+  // return specified columns
+  db.Model(&users).Clauses(clause.Returning{Columns: []clause.Column{{Name: "name"}, {Name: "salary"}}}).Where("role = ?", "admin").Update("salary", gorm.Expr("salary * ?", 2))
+  // UPDATE `users` SET `salary`=salary * 2,`updated_at`="2021-10-28 17:37:23.19" WHERE role = "admin" RETURNING `name`, `salary`
+  // users => []User{{ID: 0, Name: "jinzhu", Role: "", Salary: 100}, {ID: 0, Name: "jinzhu.2", Role: "", Salary: 1000}}
+  ```
+
+  * `Returning` 不设置返回的字段，会**全部返回**。设置了，就**返回指定的**，其余的为 ""
+
+#### 1.3.4.11 检查字段是否变更
+
+* 使用 `Hook`，在 `Hook` 中使用 `tx.Statement.Changed` **检查字段**是否变更
+
+  ```go
+  func (u *User) BeforeUpdate(tx *gorm.DB) (err error) {
+    // if Role changed
+      if tx.Statement.Changed("Role") {
+      return errors.New("role not allowed to change")
+      }
+  
+    if tx.Statement.Changed("Name", "Admin") { // if Name or Role changed
+      tx.Statement.SetColumn("Age", 18)
+    }
+  
+    // if any fields changed
+      if tx.Statement.Changed() {
+          tx.Statement.SetColumn("RefreshedAt", time.Now())
+      }
+      return nil
+  }
+  
+  db.Model(&User{ID: 1, Name: "jinzhu"}).Updates(map[string]interface{"name": "jinzhu2"})
+  // Changed("Name") => true
+  db.Model(&User{ID: 1, Name: "jinzhu"}).Updates(map[string]interface{"name": "jinzhu"})
+  // Changed("Name") => false, `Name` not changed
+  db.Model(&User{ID: 1, Name: "jinzhu"}).Select("Admin").Updates(map[string]interface{
+    "name": "jinzhu2", "admin": false,
+  })
+  // Changed("Name") => false, `Name` not selected to update
+  
+  db.Model(&User{ID: 1, Name: "jinzhu"}).Updates(User{Name: "jinzhu2"})
+  // Changed("Name") => true
+  db.Model(&User{ID: 1, Name: "jinzhu"}).Updates(User{Name: "jinzhu"})
+  // Changed("Name") => false, `Name` not changed
+  db.Model(&User{ID: 1, Name: "jinzhu"}).Select("Admin").Updates(User{Name: "jinzhu2"})
+  // Changed("Name") => false, `Name` not selected to update
+  ```
+
+#### 1.3.4.12 在 Update 时修改值
+
+* 同样使用 `Hook` 在更新前判断
+
+  ```go
+  func (user *User) BeforeSave(tx *gorm.DB) (err error) {
+    if pw, err := bcrypt.GenerateFromPassword(user.Password, 0); err == nil {
+      tx.Statement.SetColumn("EncryptedPassword", pw)
+    }
+  
+    if tx.Statement.Changed("Code") {
+      user.Age += 20
+      tx.Statement.SetColumn("Age", user.Age)
+    }
+  }
+  
+  db.Model(&user).Update("Name", "jinzhu")
+  ```
+
+### 1.3.5 删除
+
+#### 1.3.5.1 删除一条记录
+
+* 删除对象需要指定主键，否则会**触发批量删除**
+
+#### 1.3.5.2 根据主键删除
+
+* 主键，内联条件
+
+#### 1.3.5.3 批量删除
+
+* **不指定主属性**，使用模糊查询之类的，会进行批量删除，Delete 中就可以附带**模糊查询**的语句
+
+* 带有主键的模型切片，可以提高删除的效率
+
+#### 1.3.5.4 阻止全局删除
+
+* 与 `Updates` 相同，会去阻止全局删除
+
+#### 1.3.5.5 返回删除行的数据
+
+* 同样与 `Updates` 相同，使用 `clause.Returning`
+
+#### 1.3.5.6 软删除
+
+**软删除，标记删除，但不会物理删除**
+
+* `gorm.DeletedAt`字段，自动获得软删除能力
+* `gorm` 会标记为当前时间，让查询方法无法查询到
+
+**查找被删除的记录**
+
+* 使用 `Unscoped()` 获取 `tx`，来进行查找
+
+  ```go
+  db.Unscoped().Where("age = 20").Find(&users)
+  // SELECT * FROM users WHERE age = 20;
+  ```
+
+**永久删除**
+
+* 同样使用 `Unscoped()` 获取 `tx`，然后进行删除
+
+#### 1.3.5.7 删除标志
+
+**gorm.Model 使用 *time.Time 作为 DeletedAt 的字段类型，通过软删除插件 gorm.io/plugin/soft_delete 可以指定其他数据类型**
+
+```go
+import "gorm.io/plugin/soft_delete"
+
+type User struct {
+  ID        uint
+  Name      string                `gorm:"uniqueIndex:udx_name"`
+  DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:udx_name"`
+}
+```
+
+**Unix 时间戳**
+
+* 使用 `milli` 或者 `nano` 作为值，通过 `tag` 作为标记
+
+  ```go
+  type User struct {
+    ID    uint
+    Name  string
+    DeletedAt soft_delete.DeletedAt `gorm:"softDelete:milli"`
+    // DeletedAt soft_delete.DeletedAt `gorm:"softDelete:nano"`
+  }
+  
+  // 查询
+  SELECT * FROM users WHERE deleted_at = 0;
+  
+  // 软删除
+  UPDATE users SET deleted_at = /* current unix milli second or nano second */ WHERE ID = 1;
+  ```
+
+* 使用 `1/0` 作为删除标志
+
+  ```go
+  import "gorm.io/plugin/soft_delete"
+  
+  type User struct {
+    ID    uint
+    Name  string
+    IsDel soft_delete.DeletedAt `gorm:"softDelete:flag"`
+  }
+  
+  // 查询
+  SELECT * FROM users WHERE is_del = 0;
+  
+  // 软删除
+  UPDATE users SET is_del = 1 WHERE ID = 1;
+  ```
+
+* 混合模式
+
+  ```go
+  type User struct {
+    ID        uint
+    Name      string
+    DeletedAt time.Time
+    IsDel     soft_delete.DeletedAt `gorm:"softDelete:flag,DeletedAtField:DeletedAt"` // use `1` `0`
+    // IsDel     soft_delete.DeletedAt `gorm:"softDelete:,DeletedAtField:DeletedAt"` // use `unix second`
+    // IsDel     soft_delete.DeletedAt `gorm:"softDelete:nano,DeletedAtField:DeletedAt"` // use `unix nano second`
+  }
+  
+  // 查询
+  SELECT * FROM users WHERE is_del = 0;
+  
+  // 软删除
+  UPDATE users SET is_del = 1, deleted_at = /* current unix second */ WHERE ID = 1;
+  ```
+
+### 1.3.6 原生 SQL 和 SQL 生成器
+
+* **原生 SQL**
+
+  * 使用 `Raw` 执行原生 `SQL` 语句，`Scan` 获取结果（不需要传入模型结构体，而是对应查询显示结果的结构体即可
+  * `Exec`  原生 SQL，可以使用**占位符**来**获取表达式**
+  * GORM 允许缓存预编译 SQL 语句来提高性能，查看 [性能](https://gorm.io/zh_CN/docs/performance.html) 获取详情
+
+* **命名参数**（支持 `sql.NamedArg` 和 `map[string]interface{}{}` 或 `struct` 形式的命名参数）
+
+  * `sql.Named`: 占位符名称 + 替换参数的形式
+  * `map[string]interface{}`： 同样是 占位符名称 + 替换参数的 `kv` 形式
+  * `struct`：字段为占位符的名称，字段对应的值，为替换参数的值（初始化）
+
+  ```go
+  db.Where("name1 = @name OR name2 = @name", sql.Named("name", "jinzhu")).Find(&user)
+  // SELECT * FROM `users` WHERE name1 = "jinzhu" OR name2 = "jinzhu"
+  
+  db.Where("name1 = @name OR name2 = @name", map[string]interface{}{"name": "jinzhu2"}).First(&result3)
+  // SELECT * FROM `users` WHERE name1 = "jinzhu2" OR name2 = "jinzhu2" ORDER BY `users`.`id` LIMIT 1
+  
+  // 原生 SQL 及命名参数
+  db.Raw("SELECT * FROM users WHERE name1 = @name OR name2 = @name2 OR name3 = @name",
+     sql.Named("name", "jinzhu1"), sql.Named("name2", "jinzhu2")).Find(&user)
+  // SELECT * FROM users WHERE name1 = "jinzhu1" OR name2 = "jinzhu2" OR name3 = "jinzhu1"
+  
+  db.Exec("UPDATE users SET name1 = @name, name2 = @name2, name3 = @name",
+     sql.Named("name", "jinzhunew"), sql.Named("name2", "jinzhunew2"))
+  // UPDATE users SET name1 = "jinzhunew", name2 = "jinzhunew2", name3 = "jinzhunew"
+  
+  db.Raw("SELECT * FROM users WHERE (name1 = @name AND name3 = @name) AND name2 = @name2",
+     map[string]interface{}{"name": "jinzhu", "name2": "jinzhu2"}).Find(&user)
+  // SELECT * FROM users WHERE (name1 = "jinzhu" AND name3 = "jinzhu") AND name2 = "jinzhu2"
+  
+  type NamedArgument struct {
+      Name string
+      Name2 string
+  }
+  
+  db.Raw("SELECT * FROM users WHERE (name1 = @Name AND name3 = @Name) AND name2 = @Name2",
+       NamedArgument{Name: "jinzhu", Name2: "jinzhu2"}).Find(&user)
+  // SELECT * FROM users WHERE (name1 = "jinzhu" AND name3 = "jinzhu") AND name2 = "jinzhu2"
+  ```
+
+* **DryRun 模式**（不执行，生成 `SQL` 以及参数，用来调试）
+
+  * 同样根据 `gorm.Session` 进行设置参数 `.Statement` 获取
+
+  ```go
+  stmt := db.Session(&gorm.Session{DryRun: true}).First(&user, 1).Statement
+  stmt.SQL.String() //=> SELECT * FROM `users` WHERE `id` = $1 ORDER BY `id`
+  stmt.Vars         //=> []interface{}{1}
+  ```
+
+* **ToSQL**（返回生成 `SQL` 但不执行）
+
+  * 相当与是用来查看些的语句产生的 SQL 是什么
+
+    ```go
+    sql := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
+      return tx.Model(&User{}).Where("id = ?", 100).Limit(10).Order("age desc").Find(&[]User{})
+    })
+    ```
+
+* **Row 和 Rows**（与 sql 相同）
+
+  * `Row` 直接使用 `Scan`
+  * `Rows` 需要先 `Next` 移动游标，然后还需要关闭 `rows.Close()` ，不然数据库连接不会释放
+
+* **将 sql.Rows 扫描到 model 中**
+
+  * s使用 `ScanRows(rows, &user)` 来进行扫描，同时也是需要**移动游标**
+
+* **连接；在一个 tpc DB 连接中运行多条 SQL（不是事务）**
+
+  * 方法中的 `SQL`，会在一个 `Connect` 中全部执行
+
+  ```go
+  db.Connection(func(tx *gorm.DB) error {
+    tx.Exec("SET my.role = ?", "admin")
+  
+    tx.First(&User{})
+  })
+  ```
+
+* **子句（Clause）**
+
+  * GORM 内部使用 SQL builder 生成 SQL。对于每个操作，GORM 都会创建一个 `*gorm.Statement` 对象，所有的 GORM API 都是在为 `statement` 添加、修改 `子句`，最后，GORM 会根据这些子句生成 SQL
+
+  * 当调用 `First` 进行查询时，会在 `Statement` 中添加以下子句，用来构造查询
+
+    ```go
+    var limit = 1
+    clause.Select{Columns: []clause.Column{{Name: "*"}}}
+    clause.From{Tables: []clause.Table{{Name: clause.CurrentTable}}}
+    clause.Limit{Limit: &limit}
+    clause.OrderBy{Columns: []clause.OrderByColumn{
+      {
+        Column: clause.Column{
+          Table: clause.CurrentTable,
+          Name:  clause.PrimaryKey,
+        },
+      },
+    }}
+    ```
+
+  * 然后 GORM 在 `Query` callback 中构建最终的查询 SQL
+
+    ```go
+    Statement.Build("SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "LIMIT", "FOR")
+    ```
+
+  * 生成 SQL
+
+    ```go
+    SELECT * FROM `users` ORDER BY `users`.`id` LIMIT 1
+    ```
+
+  * 您可以自定义 `子句` 并与 GORM 一起使用，这需要实现 [Interface](https://pkg.go.dev/gorm.io/gorm/clause?tab=doc#Interface) 接口；[示例](https://github.com/go-gorm/gorm/tree/master/clause)
+
+* **子句构造器**（不同数据库，子句可能生成不同的 SQL）
+
+  * 支持 Clause 的原因是，允许数据库驱动程序通过注册 Clause Builder 来取代默认值
+
+    ```go
+    db.Offset(10).Limit(5).Find(&users)
+    // SQL Server 会生成
+    // SELECT * FROM "users" OFFSET 10 ROW FETCH NEXT 5 ROWS ONLY
+    // MySQL 会生成
+    // SELECT * FROM `users` LIMIT 5 OFFSET 10
+    ```
+
+* **子句选项**（添加自定义子句）
+
+  ```go
+  db.Clauses(clause.Insert{Modifier: "IGNORE"}).Create(&user)
+  // INSERT IGNORE INTO users (name,age...) VALUES ("jinzhu",18...);
+  ```
+
+  * clause.Insert 是 GORM 提供的插入语句选项，用于指定插入操作的选项和修饰符。
+  * {Modifier: "IGNORE"} 是 clause.Insert 的一个选项，通过设置 Modifier 字段为 "IGNORE"，指示数据库在插入时忽略重复键的错误。
+
+* **StatementModifier**
+
+  * 允许修改语句
+
+    ```go
+    import "gorm.io/hints"
+    
+    db.Clauses(hints.New("hint")).Find(&User{})
+    // SELECT * /*+ hint */ FROM `users`
+    ```
+
+  * 在 GORM 中，StatementModifier 表示语句修改器，用于向查询中添加特定的 SQL 修饰符或选项。它可以通过 Clauses 方法和相应的 GORM 结构体选项来指定。
+
+  * 常见的示例
+
+    * `clause.Locking`：用于在查询中添加数据库行级别的锁定选项，如 `FOR UPDATE` 或 `LOCK IN SHARE MODE`。
+    * `clause.OrderBy`：用于指定查询结果的排序方式。
+    * `clause.GroupBy`：用于指定查询结果的分组方式。
+    * `clause.Having`：用于指定查询结果的筛选条件。
+    * `clause.Limit`：用于限制查询结果的返回数量。
+    * `clause.Offset`：用于指定查询结果的起始偏移量。
+    * `clause.Select`：用于指定查询结果中要选择的列。
 
 ### 1.3.* 总结
 
@@ -904,8 +1708,9 @@ sqlDB.SetConnMaxLifetime(time.Hour)
 * 如果使用列表，那默认就是主键的条件（IN）
 * 同一个 `tx`，可以在一个语句中多次查询多次修改条件
 * 可以带条件的，都会有**占位符**，多参数输入后续参数是 `Any`
-
-
+* 占位符不是捕获一个变量，而是可以**捕获各种内容**（多维列表，*gorm.DB 的语句等）
+* Model 回同时判断结构体中**初始化的字段**来当作**条件**
+* Hook 功能很多，更新前更新后，对数据库操作，对插入数据操作，验证，加密等等
 
 ## 1.4 数据库设置
 
@@ -916,4 +1721,586 @@ sqlDB.SetConnMaxLifetime(time.Hour)
 ### 1.4.2 指定表
 
 * `db.Table("users")`：通过这个指定表，同样返回一个事务
+
+### 1.4.3 Belongs To（一对一的关系）
+
+**相当于指定模型外键**
+
+#### 1.4.3.1 Belongs To
+
+`belongs to` 会与另一个模型建立了一对一的连接。 这种模型的每一个实例都“属于”另一个模型的一个实例
+
+```go
+// `User` 属于 `Company`，`CompanyID` 是外键
+type User struct {
+  gorm.Model
+  Name      string
+  CompanyID int
+  Company   Company
+}
+
+type Company struct {
+  ID   int
+  Name string
+}
+```
+
+* `CompanyID` 被隐含地用来在 `User` 和 `Company` 之间创建一个外键关系， 因此必须包含在 `User` 结构体中才能填充 `Company` 内部结构体
+
+#### 1.4.3.2 重写外键
+
+**使用 Tag 重新定义外键**
+
+* 在一对一的实体的 `Tag` 中标注**外键字段**的名字
+
+  ```go
+  type User struct {
+    gorm.Model
+    Name         string
+    CompanyRefer int
+    Company      Company `gorm:"foreignKey:CompanyRefer"`
+    // 使用 CompanyRefer 作为外键
+  }
+  
+  type Company struct {
+    ID   int
+    Name string
+  }
+  ```
+
+#### 1.4.3.3 重写引用 
+
+* `GORM` 会默认把 `Company` 中的主键的属性值保存到 `User` 的外键中，可以通过 `references` 修改
+
+  ```go
+  type User struct {
+    gorm.Model
+    Name      string
+    CompanyID string
+    Company   Company `gorm:"references:Code"` // 使用 Code 作为引用
+  }
+  
+  type Company struct {
+    ID   int
+    Code string
+    Name string
+  }
+  ```
+
+  * 将 `Company` 实体中的 `Code` 作为 `User` 外键初始化的值
+  * 如果外键名恰好在拥有者类型中存在，GORM 通常会错误的认为它是 `has one` 关系。我们需要在 `belongs to` 关系中指定 `references`
+
+  ```go
+  type User struct {
+    gorm.Model
+    Name      string
+    CompanyID string
+    Company   Company `gorm:"references:CompanyID"` // 使用 Company.CompanyID 作为引用
+  }
+  
+  type Company struct {
+    CompanyID   int
+    Code        string
+    Name        string
+  }
+  ```
+
+#### 1.4.3.4 外键约束
+
+* 你可以通过 `constraint` 标签配置 `OnUpdate`、`OnDelete` 实现外键约束，在使用 GORM 进行迁移时它会被创建
+
+  ```go
+  type User struct {
+    gorm.Model
+    Name      string
+    CompanyID int
+    Company   Company `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+  }
+  
+  type Company struct {
+    ID   int
+    Name string
+  }
+  ```
+
+### 1.4.4 Has One（一对一关联）
+
+**每个模型都拥有另一个完整的模型，不是外键关系，而是整体关系**
+
+#### 1.4.4.1 Has One
+
+* **声明**
+
+  ```go
+  // User 有一张 CreditCard，UserID 是外键
+  type User struct {
+    gorm.Model
+    CreditCard CreditCard   // 完整的模型
+  }
+  
+  type CreditCard struct {
+    gorm.Model
+    Number string
+    UserID uint   // 会将 CreditCard 的主键保存到 User 中
+  }
+  ```
+
+* **检索**
+
+  ```go
+  // 检索用户列表并预加载信用卡
+  func GetAll(db *gorm.DB) ([]User, error) {
+      var users []User
+      err := db.Model(&User{}).Preload("CreditCard").Find(&users).Error
+      return users, err
+  }
+  ```
+
+#### 1.4.4.2 重写外键
+
+```go
+type User struct {
+  gorm.Model
+  CreditCard CreditCard `gorm:"foreignKey:UserName"` // 使用 UserName 作为外键
+}
+
+type CreditCard struct {
+  gorm.Model
+  Number   string
+  UserName string
+}
+```
+
+#### 1.4.4.3 重写引用
+
+* 在 `Tag` 中标注 `foreignKey`，同时标注 `references`
+
+  ```go
+  type User struct {
+    gorm.Model
+    Name       string     `gorm:"index"`
+    CreditCard CreditCard `gorm:"foreignKey:UserName;references:name"`
+  }
+  
+  type CreditCard struct {
+    gorm.Model
+    Number   string
+    UserName string
+  }
+  ```
+
+#### 1.4.4.4 多态关联
+
+* GORM 为 `has one` 和 `has many` 提供了多态关联支持，它会将拥有者实体的表名、主键值都保存到多态类型的字段中
+
+  ```go
+  type Cat struct {
+    ID    int
+    Name  string
+    Toy   Toy `gorm:"polymorphic:Owner;"`
+  }
+  
+  type Dog struct {
+    ID   int
+    Name string
+    Toy  Toy `gorm:"polymorphic:Owner;"`
+  }
+  
+  type Toy struct {
+    ID        int
+    Name      string
+    OwnerID   int
+    OwnerType string
+  }
+  
+  db.Create(&Dog{Name: "dog1", Toy: Toy{Name: "toy1"}})
+  // INSERT INTO `dogs` (`name`) VALUES ("dog1")
+  // INSERT INTO `toys` (`name`,`owner_id`,`owner_type`) VALUES ("toy1","1","dogs")
+  ```
+
+* 使用标签 `polymorphicValue` 来更改多态类型的值
+
+  ```go
+  type Dog struct {
+    ID   int
+    Name string
+    Toy  Toy `gorm:"polymorphic:Owner;polymorphicValue:master"`
+  }
+  
+  type Toy struct {
+    ID        int
+    Name      string
+    OwnerID   int
+    OwnerType string
+  }
+  
+  db.Create(&Dog{Name: "dog1", Toy: Toy{Name: "toy1"}})
+  // INSERT INTO `dogs` (`name`) VALUES ("dog1")
+  // INSERT INTO `toys` (`name`,`owner_id`,`owner_type`) VALUES ("toy1","1","master")
+  ```
+
+#### 1.4.4.5 自引用 Has One
+
+```go
+type User struct {
+  gorm.Model
+  Name      string
+  ManagerID *uint
+  Manager   *User
+}
+```
+
+#### 1.4.4.6 外键约束
+
+* 与 `Belongs to` 相同
+
+  ```go
+  type User struct {
+    gorm.Model
+    CreditCard CreditCard `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+  }
+  
+  type CreditCard struct {
+    gorm.Model
+    Number string
+    UserID uint
+  }
+  ```
+
+### 1.4.5 Has Many（一对多的连接） 
+
+**拥有者可以有零个或者多个关联模型**
+
+#### 1.4.5.1 Has Many
+
+* **声明**（实体列表）
+
+  ```go
+  // User 有多张 CreditCard，UserID 是外键
+  type User struct {
+    gorm.Model
+    CreditCards []CreditCard
+  }
+  
+  type CreditCard struct {
+    gorm.Model
+    Number string
+    UserID uint
+  }
+  ```
+
+* **检索**
+
+  ```go
+  // 检索用户列表并预加载信用卡
+  func GetAll(db *gorm.DB) ([]User, error) {
+      var users []User
+      err := db.Model(&User{}).Preload("CreditCards").Find(&users).Error
+      return users, err
+  }
+  ```
+
+#### 1.4.5.2 重写外键
+
+* 用另一个字段作为外键
+
+  ```go
+  type User struct {
+    gorm.Model
+    CreditCards []CreditCard `gorm:"foreignKey:UserRefer"`   // 使用 UserRefer 作为 CreditCard 的外键
+  }
+  
+  type CreditCard struct {
+    gorm.Model
+    Number    string
+    UserRefer uint
+  }
+  ```
+
+#### 1.4.5.3 重写引用
+
+```go
+type User struct {
+  gorm.Model
+  MemberNumber string
+  CreditCards  []CreditCard `gorm:"foreignKey:UserNumber;references:MemberNumber"`
+}
+
+type CreditCard struct {
+  gorm.Model
+  Number     string
+  UserNumber string
+}
+```
+
+#### 1.4.5.4 多态关联
+
+* GORM 为 `has one` 和 `has many` 提供了多态关联支持，它会将拥有者实体的表名、主键都保存到多态类型的字段中
+
+  ```go
+  type Dog struct {
+    ID   int
+    Name string
+    Toys []Toy `gorm:"polymorphic:Owner;"`
+  }
+  
+  type Toy struct {
+    ID        int
+    Name      string
+    OwnerID   int    // 主键
+    OwnerType string   // 表名
+  }
+  
+  db.Create(&Dog{Name: "dog1", Toys: []Toy{{Name: "toy1"}, {Name: "toy2"}}})
+  // INSERT INTO `dogs` (`name`) VALUES ("dog1")
+  // INSERT INTO `toys` (`name`,`owner_id`,`owner_type`) VALUES ("toy1","1","dogs"), ("toy2","1","dogs")
+  ```
+
+* 使用标签 `polymorphicValue` 来更改多态类型的值
+
+#### 1.4.5.5 自引用 has Many
+
+```go
+type User struct {
+  gorm.Model
+  Name      string
+  ManagerID *uint
+  Team      []User `gorm:"foreignkey:ManagerID"`
+}
+```
+
+#### 1.4.5.6 外键约束
+
+* 同 `Has One`
+
+### 1.4.6 Many To Many（多对多关系）
+
+**多表之间互相包含**
+
+#### 1.4.6.1 Many To Many
+
+* 会在两个 Model 中添加一张连接表（一个模型包含多个实体，多个实体又可以对应一个模型）
+
+* **声明**
+
+  ```go
+  // User 拥有并属于多种 language，`user_languages` 是连接表
+  type User struct {
+    gorm.Model
+    Languages []Language `gorm:"many2many:user_languages;"`
+  }
+  
+  type Language struct {
+    gorm.Model
+    Name string
+  }
+  ```
+
+* 当使用 GORM 的 `AutoMigrate` 为 `User` 创建表时，GORM 会自动创建连接表
+
+* **反向引用**
+
+  * **声明**
+
+    ```go
+    // User 拥有并属于多种 language，`user_languages` 是连接表
+    type User struct {
+      gorm.Model
+      Languages []*Language `gorm:"many2many:user_languages;"`
+    }
+    
+    type Language struct {
+      gorm.Model
+      Name string
+      Users []*User `gorm:"many2many:user_languages;"`
+    }
+    ```
+
+  * **检索**
+
+    ```go
+    // 检索 User 列表并预加载 Language
+    func GetAllUsers(db *gorm.DB) ([]User, error) {
+        var users []User
+        err := db.Model(&User{}).Preload("Languages").Find(&users).Error
+        return users, err
+    }
+    
+    // 检索 Language 列表并预加载 User
+    func GetAllLanguages(db *gorm.DB) ([]Language, error) {
+        var languages []Language
+        err := db.Model(&Language{}).Preload("Users").Find(&languages).Error
+        return languages, err
+    }
+    ```
+
+#### 1.4.6.2 重写外键
+
+* 连接表会同时拥有两个模型的外键
+
+  ```go
+  type User struct {
+    gorm.Model
+    Languages []Language `gorm:"many2many:user_languages;"`
+  }
+  
+  type Language struct {
+    gorm.Model
+    Name string
+  }
+  
+  // 连接表：user_languages
+  //   foreign key: user_id, reference: users.id
+  //   foreign key: language_id, reference: languages.id
+  ```
+
+* 使用标签 `foreignKey`、`references`、`joinforeignKey`、`joinReferences` 进行重写
+
+  ```go
+  type User struct {
+      gorm.Model
+      Profiles []Profile `gorm:"many2many:user_profiles;foreignKey:Refer;joinForeignKey:UserReferID;References:UserRefer;joinReferences:ProfileRefer"`
+      Refer    uint      `gorm:"index:,unique"`
+  }
+  
+  type Profile struct {
+      gorm.Model
+      Name      string
+      UserRefer uint `gorm:"index:,unique"`
+  }
+  
+  // 会创建连接表：user_profiles
+  //   foreign key: user_refer_id, reference: users.refer
+  //   foreign key: profile_refer, reference: profiles.user_refer
+  ```
+
+* 逻辑梳理
+
+  ```go
+  type User struct {
+      gorm.Model
+      Profiles []Profile `gorm:"many2many:user_profiles;foreignKey:Refer;joinForeignKey:UserReferID;References:UserRefer;joinReferences:ProfileRefer"`
+      Refer    uint      `gorm:"index:,unique"`
+  }
+  
+  type Profile struct {
+      gorm.Model
+      Name      string
+      UserRefer uint `gorm:"index:,unique"`
+  }
+  
+  // 会创建连接表：user_profiles
+  //   foreign key: user_refer_id, reference: users.refer
+  //   foreign key: profile_refer, reference: profiles.user_refer
+  
+  // many2many:user_profiles 表示的是连接表，后面跟的所有外键和引用都是这个表中的
+  // foreignKey:Refer 去连接表中查，这个是 User 的外键
+  // References:UserRefer 与上方对应，修改外键对应的引用（在 Profile 中）
+  // joinForeignKey:UserReferID 去连接表中查，这个是 Profile 的外键
+  // joinReferences:ProfileRefer 将 UserReferID 的引用修改成 ProfileRefer
+  ```
+
+* 某些数据库只允许在唯一索引字段上创建外键，如果您在迁移时会创建外键，则需要指定 `unique index` 标签
+
+#### 1.4.6.3 自引用 Many2Many
+
+```go
+type User struct {
+  gorm.Model
+    Friends []*User `gorm:"many2many:user_friends"`
+}
+
+// 会创建连接表：user_friends
+//   foreign key: user_id, reference: users.id
+//   foreign key: friend_id, reference: users.id
+```
+
+#### 1.4.6.4 自定义连接表
+
+* 自定义连接表要求外键是复合主键或复合唯一索引
+
+  ```go
+  type Person struct {
+    ID        int
+    Name      string
+    Addresses []Address `gorm:"many2many:person_addressses;"`
+  }
+  
+  type Address struct {
+    ID   uint
+    Name string
+  }
+  
+  type PersonAddress struct {
+    PersonID  int `gorm:"primaryKey"`
+    AddressID int `gorm:"primaryKey"`
+    CreatedAt time.Time
+    DeletedAt gorm.DeletedAt
+  }
+  
+  func (PersonAddress) BeforeCreate(db *gorm.DB) error {
+    // ...
+  }
+  
+  // 修改 Person 的 Addresses 字段的连接表为 PersonAddress
+  // PersonAddress 必须定义好所需的外键，否则会报错
+  err := db.SetupJoinTable(&Person{}, "Addresses", &PersonAddress{})
+  ```
+
+#### 1.4.6.5 外键约束
+
+```go
+type User struct {
+  gorm.Model
+  Languages []Language `gorm:"many2many:user_speaks;"`
+}
+
+type Language struct {
+  Code string `gorm:"primarykey"`
+  Name string
+}
+
+// CREATE TABLE `user_speaks` (`user_id` integer,`language_code` text,PRIMARY KEY (`user_id`,`language_code`),CONSTRAINT `fk_user_speaks_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE,CONSTRAINT `fk_user_speaks_language` FOREIGN KEY (`language_code`) REFERENCES `languages`(`code`) ON DELETE SET NULL ON UPDATE CASCADE);
+```
+
+#### 1.4.6.6 复合外键
+
+* 模型使用了**复合主键**，GORM 会默认启用
+
+  ```go
+  type Tag struct {
+    ID     uint   `gorm:"primaryKey"`
+    Locale string `gorm:"primaryKey"`
+    Value  string
+  }
+  
+  type Blog struct {
+    ID         uint   `gorm:"primaryKey"`
+    Locale     string `gorm:"primaryKey"`
+    Subject    string
+    Body       string
+    Tags       []Tag `gorm:"many2many:blog_tags;"`
+    LocaleTags []Tag `gorm:"many2many:locale_blog_tags;ForeignKey:id,locale;References:id"`
+    SharedTags []Tag `gorm:"many2many:shared_blog_tags;ForeignKey:id;References:id"`
+  }
+  
+  // 连接表：blog_tags
+  //   foreign key: blog_id, reference: blogs.id
+  //   foreign key: blog_locale, reference: blogs.locale
+  //   foreign key: tag_id, reference: tags.id
+  //   foreign key: tag_locale, reference: tags.locale
+  
+  // 连接表：locale_blog_tags
+  //   foreign key: blog_id, reference: blogs.id
+  //   foreign key: blog_locale, reference: blogs.locale
+  //   foreign key: tag_id, reference: tags.id
+  
+  // 连接表：shared_blog_tags
+  //   foreign key: blog_id, reference: blogs.id
+  //   foreign key: tag_id, reference: tags.id
+  ```
+
+  
+
+
 
