@@ -2300,7 +2300,397 @@ type Language struct {
   //   foreign key: tag_id, reference: tags.id
   ```
 
+
+### 1.4.7 关联模式
+
+#### 1.4.7.1 自动创建、更新
+
+* GORM 会通过 `Upsert` **自动保存关联**及其**引用**记录（级联插入）
+
+* 更新关联的数据：使用 `FullSaveAssociations` 模式
+
+  ```go
+  db.Session(&gorm.Session{FullSaveAssociations: true}).Updates(&user)
+  ```
+
+* 跳过自动创建、更新，使用 `Select` 或 `Omit` 选择**固定字段**
+
+  ```go
+  db.Select("Name").Create(&user)
+  // INSERT INTO "users" (name) VALUES ("jinzhu", 1, 2);
+  
+  // 跳过某个字段
+  db.Omit("BillingAddress").Create(&user)
+  // Skip create BillingAddress when creating a user
+  
+  // 跳过所有关联
+  db.Omit(clause.Associations).Create(&user)
+  // Skip all associations when creating a user
+  ```
+
+* `many2many` 关联，`GORM` 在创建连接表引用之前，会先 `upsert` 关联。如果你想跳过关联的 `upsert`
+
+  ```go
+  db.Omit("Languages.*").Create(&user)
+  ```
+
+  跳过创建关联及其引用
+
+  ```go
+  db.Omit("Languages").Create(&user)
+  ```
+
+#### 1.4.7.2 Select/Omit 关联字段
+
+* 选择**特定**的字段进行创建
+
+  ```go
+  user := User{
+    Name:            "jinzhu",
+    BillingAddress:  Address{Address1: "Billing Address - Address 1", Address2: "addr2"},
+    ShippingAddress: Address{Address1: "Shipping Address - Address 1", Address2: "addr2"},
+  }
+  
+  // 创建 user 及其 BillingAddress、ShippingAddress
+  // 在创建 BillingAddress 时，仅使用其 address1、address2 字段，忽略其它字段
+  db.Select("BillingAddress.Address1", "BillingAddress.Address2").Create(&user)
+  
+  db.Omit("BillingAddress.Address2", "BillingAddress.CreatedAt").Create(&user)
+  ```
+
+#### 1.4.7.3 关联模式
+
+* 开始**关联模式**：显示表明模型的关联关系
+
+  * Model 中的模型是**源模型**，关联关系是其**依赖模型**
+  * **关系字段**（依赖模型）的名字必须对应
+
+  ```go
+  user := User{
+    Name:            "jinzhu",
+    BillingAddress:  Address{Address1: "Billing Address - Address 1"},
+    ShippingAddress: Address{Address1: "Shipping Address - Address 1"},
+    Emails:          []Email{
+      {Email: "jinzhu@example.com"},
+      {Email: "jinzhu-2@example.com"},
+    },
+    Languages:       []Language{
+      {Name: "ZH"},
+      {Name: "EN"},
+    },
+  }
+  
+  // 开始关联模式
+  var user User
+  db.Model(&user).Association("Languages")
+  // `user` 是源模型，它的主键不能为空
+  // 关系的字段名是 `Languages`
+  // 如果匹配了上面两个要求，会开始关联模式，否则会返回错误
+  db.Model(&user).Association("Languages").Error
+  ```
+
+**查找关联**
+
+* 查找所有**匹配的关联记录**
+
+  ```go
+  db.Model(&user).Association("Languages").Find(&languages)
+  ```
+
+  * `user` 中 `Languages` 的所有记录
+  * 相当于条件查找，查找给定 `user` 的 `Languages` 表中的记录
+
+* 查找**带条件**的关联
+
+  ```go
+  codes := []string{"zh-CN", "en-US", "ja-JP"}
+  db.Model(&user).Where("code IN ?", codes).Association("Languages").Find(&languages)
+  
+  db.Model(&user).Where("code IN ?", codes).Order("code desc").Association("Languages").Find(&languages)
+  ```
+
+**添加关联**
+
+* 为 `many to many`、`has many` 添加新的关联；为 `has one`, `belongs to` 替换当前的关联
+
+  ```go
+  db.Model(&user).Association("Languages").Append([]Language{languageZH, languageEN})
+  
+  db.Model(&user).Association("Languages").Append(&Language{Name: "DE"})
+  
+  db.Model(&user).Association("CreditCard").Append(&CreditCard{Number: "411111111111"})
+  
+  ```
+
+  * 增加更多的关联记录
+
+**替换关联**
+
+* 用一个新的关联替换当前的关联
+
+  ```go
+  db.Model(&user).Association("Languages").Replace([]Language{languageZH, languageEN})
+  
+  db.Model(&user).Association("Languages").Replace(Language{Name: "DE"}, languageEN)
+  ```
+
+  * 相当于更改原本的关联内容
+
+**删除关联**
+
+* 如果存在，则删除源模型与参数之间的关系，只会删除引用，**不会**从数据库中删除这些对象。
+
+  ```go
+  db.Model(&user).Association("Languages").Delete([]Language{languageZH, languageEN})
+  db.Model(&user).Association("Languages").Delete(languageZH, languageEN)
+  ```
+
+  * 不会执行数据库的删除操作，只是清除关联，相关联的 Language **记录中标记 user 的属性**，会被**置空**（**将旧的关联的外键设置为null**）
+
+**清空关联**
+
+* 删除源模型与关联之间的所有引用，但不会删除这些关联
+
+  ```go
+  db.Model(&user).Association("Languages").Clear()
+  ```
+
+**关联计数**
+
+* 返回当前关联的计数
+
+  ```go
+  db.Model(&user).Association("Languages").Count()
+  
+  // 条件计数
+  codes := []string{"zh-CN", "en-US", "ja-JP"}
+  db.Model(&user).Where("code IN ?", codes).Association("Languages").Count()
+  ```
+
+**批量处理数据**
+
+```go
+// 查询所有用户的所有角色
+db.Model(&users).Association("Role").Find(&roles)
+
+// 从所有 team 中删除 user A
+db.Model(&users).Association("Team").Delete(&userA)
+
+// 获取去重的用户所属 team 数量
+db.Model(&users).Association("Team").Count()
+
+// 对于批量数据的 `Append`、`Replace`，参数的长度必须与数据的长度相同，否则会返回 error
+var users = []User{user1, user2, user3}
+// 例如：现在有三个 user，Append userA 到 user1 的 team，Append userB 到 user2 的 team，Append userA、userB 和 userC 到 user3 的 team
+db.Model(&users).Association("Team").Append(&userA, &userB, &[]User{userA, userB, userC})
+// 重置 user1 team 为 userA，重置 user2 的 team 为 userB，重置 user3 的 team 为 userA、 userB 和 userC
+db.Model(&users).Association("Team").Replace(&userA, &userB, &[]User{userA, userB, userC})
+```
+
+#### 1.4.7.4 删除关联记录
+
+* 使用 `Unscoped` 删除对象（同样软删除，也可以用这个实际删除）
+
+  ```go
+  // 软删除
+  // UPDATE `languages` SET `deleted_at`= ...
+  db.Model(&user).Association("Languages").Unscoped().Clear()
+  
+  // 永久删除
+  // DELETE FROM `languages` WHERE ...
+  db.Unscoped().Model(&item).Association("Languages").Unscoped().Clear()
+  ```
+
+#### 1.4.7.5 使用选择删除
+
+* 删除记录时通过 `Select` 来删除具有 has one、has many、many2many 关系的记录
+
+  ```go
+  // 删除 user 时，也删除 user 的 account
+  db.Select("Account").Delete(&user)
+  
+  // 删除 user 时，也删除 user 的 Orders、CreditCards 记录
+  db.Select("Orders", "CreditCards").Delete(&user)
+  
+  // 删除 user 时，也删除用户所有 has one/many、many2many 记录
+  db.Select(clause.Associations).Delete(&user)
+  
+  // 删除 users 时，也删除每一个 user 的 account
+  db.Select("Account").Delete(&users)
+  ```
+
+* 只有在**待删除记录**的**主键不为零**时，关联关系**才会被删除**。GORM会将这些主**键作为条件**来删除选定的关联关系
+
+  ```go
+  // 不会起作用
+  db.Select("Account").Where("name = ?", "jinzhu").Delete(&User{})
+  // 会删除所有 name=`jinzhu` 的 user，但这些 user 的 account 不会被删除
+  
+  db.Select("Account").Where("name = ?", "jinzhu").Delete(&User{ID: 1})
+  // 会删除 name = `jinzhu` 且 id = `1` 的 user，并且 user `1` 的 account 也会被删除
+  
+  db.Select("Account").Delete(&User{ID: 1})
+  // 会删除 id = `1` 的 user，并且 user `1` 的 account 也会被删除
+  ```
+
+#### 关联标签（Association Tags）
+
+| 标签             | 描述                                     |
+| :--------------- | :--------------------------------------- |
+| foreignKey       | 指定当前模型的列作为连接表的外键         |
+| references       | 指定引用表的列名，其将被映射为连接表外键 |
+| polymorphic      | 指定多态类型，比如模型名                 |
+| polymorphicValue | 指定多态值、默认表名                     |
+| many2many        | 指定连接表表名                           |
+| joinForeignKey   | 指定连接表的外键列名，其将被映射到当前表 |
+| joinReferences   | 指定连接表的外键列名，其将被映射到引用表 |
+| constraint       | 关系约束，例如：`OnUpdate`、`OnDelete`   |
+
+### 1.4.8 预加载
+
+**相当于将关联关系的表的记录提前查询出来，等同于同时执行两条查询语句**
+
+#### 1.4.8.1 Joins 预加载
+
+* 使用 **left join** 进行预加载
+
+  ```go
+  db.Joins("Company").Joins("Manager").Joins("Account").First(&user, 1)
+  db.Joins("Company").Joins("Manager").Joins("Account").First(&user, "users.name = ?", "jinzhu")
+  db.Joins("Company").Joins("Manager").Joins("Account").Find(&users, "users.id IN ?", []int{1,2,3,4,5})
+  ```
+
+* 带**条件**的 **Join**
+
+  ```go
+  db.Joins("Company", DB.Where(&Company{Alive: true})).Find(&users)
+  // SELECT `users`.`id`,`users`.`name`,`users`.`age`,`Company`.`id` AS `Company__id`,`Company`.`name` AS `Company__name` FROM `users` LEFT JOIN `companies` AS `Company` ON `users`.`company_id` = `Company`.`id` AND `Company`.`alive` = true;
+  ```
+
+* 链接嵌套
+
+  ```go
+  db.Joins("Manager").Joins("Manager.Company").Find(&users)
+  // SELECT "users"."id","users"."created_at","users"."updated_at","users"."deleted_at","users"."name","users"."age","users"."birthday","users"."company_id","users"."manager_id","users"."active","Manager"."id" AS "Manager__id","Manager"."created_at" AS "Manager__created_at","Manager"."updated_at" AS "Manager__updated_at","Manager"."deleted_at" AS "Manager__deleted_at","Manager"."name" AS "Manager__name","Manager"."age" AS "Manager__age","Manager"."birthday" AS "Manager__birthday","Manager"."company_id" AS "Manager__company_id","Manager"."manager_id" AS "Manager__manager_id","Manager"."active" AS "Manager__active","Manager__Company"."id" AS "Manager__Company__id","Manager__Company"."name" AS "Manager__Company__name" FROM "users" LEFT JOIN "users" "Manager" ON "users"."manager_id" = "Manager"."id" AND "Manager"."deleted_at" IS NULL LEFT JOIN "companies" "Manager__Company" ON "Manager"."company_id" = "Manager__Company"."id" WHERE "users"."deleted_at" IS NULL
+  ```
+
+#### 1.4.8.2 预加载全部
+
+* 类似与 `Select`
+
+  ```go
+  type User struct {
+    gorm.Model
+    Name       string
+    CompanyID  uint
+    Company    Company
+    Role       Role
+    Orders     []Order
+  }
+  
+  db.Preload(clause.Associations).Find(&users)
+  ```
+
+* 使用 `clause.Associations` 不会预加载**嵌套关联**， 但是可以**嵌套**使用 `Preloading`
+
+  ```go
+  db.Preload("Orders.OrderItems.Product").Preload(clause.Associations).Find(&users)
+  ```
+
+#### 1.4.8.3 条件预加载
+
+* 在预加载方法中增加**条件语句**
+
+  ```go
+  // Preload Orders with conditions
+  db.Preload("Orders", "state NOT IN (?)", "cancelled").Find(&users)
+  // SELECT * FROM users;
+  // SELECT * FROM orders WHERE user_id IN (1,2,3,4) AND state NOT IN ('cancelled');
+  
+  db.Where("state = ?", "active").Preload("Orders", "state NOT IN (?)", "cancelled").Find(&users)
+  // SELECT * FROM users WHERE state = 'active';
+  // SELECT * FROM orders WHERE user_id IN (1,2) AND state NOT IN ('cancelled');
+  ```
+
+#### 1.4.8.4 自定义预加载 SQL
+
+* 定义一个 `func(db *gorm.DB) *gorm.DB`
+
+  ```go
+  db.Preload("Orders", func(db *gorm.DB) *gorm.DB {
+    return db.Order("orders.amount DESC")
+  }).Find(&users)
+  // SELECT * FROM users;
+  // SELECT * FROM orders WHERE user_id IN (1,2,3,4) order by orders.amount DESC;
+  ```
+
+#### 1.4.8.5 嵌套预加载
+
+* 多个 Preload 可以嵌套，提供不能的预加载方法
+
+  * 条件
+  * 全部预加载（不能预加载嵌套关联）
+  * 嵌套关联的预加载
+  * 等
+
+  ```go
+  db.Preload("Orders.OrderItems.Product").Preload("CreditCard").Find(&users)
+  
+  // Customize Preload conditions for `Orders`
+  // And GORM won't preload unmatched order's OrderItems then
+  db.Preload("Orders", "state = ?", "paid").Preload("Orders.OrderItems").Find(&users)
+
+#### 1.4.8.6 Embedded Preloading
+
+* 嵌套的**结构体**进行**预加载**
+
+  ```go
+  type Address struct {
+      CountryID int
+      Country   Country
+  }
+  
+  type Org struct {
+      PostalAddress   Address `gorm:"embedded;embeddedPrefix:postal_address_"`
+      VisitingAddress Address `gorm:"embedded;embeddedPrefix:visiting_address_"`
+      Address         struct {
+          ID int
+          Address
+      }
+  }
+  
+  // Only preload Org.Address and Org.Address.Country
+  db.Preload("Address.Country")  // "Address" is has_one, "Country" is belongs_to (nested association)
+  
+  // Only preload Org.VisitingAddress
+  db.Preload("PostalAddress.Country") // "PostalAddress.Country" is belongs_to (embedded association)
+  
+  // Only preload Org.NestedAddress
+  db.Preload("NestedAddress.Address.Country") // "NestedAddress.Address.Country" is belongs_to (embedded association)
+  
+  // All preloaded include "Address" but exclude "Address.Country", because it won't preload nested associations.
+  db.Preload(clause.Associations)
+  ```
+
+* 当没有歧义时，我们可以省略 `embedded` 部分
+
+  ```go
+  type Address struct {
+      CountryID int
+      Country   Country
+  }
+  
+  type Org struct {
+      Address Address `gorm:"embedded"`
+  }
+  
+  db.Preload("Address.Country")
+  db.Preload("Country") // omit "Address" because there is no ambiguity
+  ```
+
   
 
 
+
+# 2 使用教程
 
