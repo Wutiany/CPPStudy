@@ -315,7 +315,165 @@
     Unmarshal(dAtA []byte) error
     ```
 
+# 3 etcd 安装与部署
 
+## 3.1 使用系统工具安装
+
+* Centos 7：`yum install etcd`
+
+## 3.2 使用二进制安装
+
+* Centos 7 使用脚本进行安装
+
+  ```bash
+  ETCD_VER=v3.4.4
+  
+  GITHUB_URL=https://github.com/etcd-io/etcd/releases/download
+  DOWNLOAD_URL=${GITHUB_URL}
+  
+  rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
+  rm -rf /tmp/etcd-download-test && mkdir -p /tmp/etcd-download-test
+  
+  curl -L ${DOWNLOAD_URL}/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz -o /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
+  tar xzvf /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz -C /tmp/etcd-download-test --strip-components=1
+  rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
+  
+  /tmp/etcd-download-test/etcd --version
+  /tmp/etcd-download-test/etcdctl version
+  ```
+
+## 3.3 使用源码安装
+
+* 需要**先安装** `golang`
+
+* 克隆分支
+
+  ```shell
+  $ git clone https://github.com/etcd-io/etcd.git
+  $ cd etcd
+  $ ./build
+  ```
+
+* 查看版本
+
+  ```shell
+  $ ./etcdctl version
+  ```
+
+  
+
+## 3.4 使用 docker 容器安装
+
+* 容器仓库源：`gcr.io/etcd-development/etcd`
+
+* 辅助容器注册表：`quay.io/coreos/etcd`
+
+* 执行的 bash 脚本
+
+  ```bash
+  REGISTRY=quay.io/coreos/etcd
+  # available from v3.2.5
+  REGISTRY=gcr.io/etcd-development/etcd
+  rm -rf /tmp/etcd-data.tmp && mkdir -p /tmp/etcd-data.tmp && \
+    docker rmi gcr.io/etcd-development/etcd:v3.4.7 || true && \
+    docker run \
+    -p 2379:2379 \
+    -p 2380:2380 \
+    --mount type=bind,source=/tmp/etcd-data.tmp,destination=/etcd-data \
+    --name etcd-gcr-v3.4.7 \
+    gcr.io/etcd-development/etcd:v3.4.7 \
+    /usr/local/bin/etcd \
+    --name s1 \
+    --data-dir /etcd-data \
+    --listen-client-urls http://0.0.0.0:2379 \
+    --advertise-client-urls http://0.0.0.0:2379 \
+    --listen-peer-urls http://0.0.0.0:2380 \
+    --initial-advertise-peer-urls http://0.0.0.0:2380 \
+    --initial-cluster s1=http://0.0.0.0:2380 \
+    --initial-cluster-token tkn \
+    --initial-cluster-state new \
+    --log-level info \
+    --logger zap \
+    --log-outputs stderr
+  
+  docker exec etcd-gcr-v3.4.7 /bin/sh -c "/usr/local/bin/etcd --version"
+  docker exec etcd-gcr-v3.4.7 /bin/sh -c "/usr/local/bin/etcdctl version"
+  docker exec etcd-gcr-v3.4.7 /bin/sh -c "/usr/local/bin/etcdctl endpoint health"
+  docker exec etcd-gcr-v3.4.7 /bin/sh -c "/usr/local/bin/etcdctl put foo bar"
+  docker exec etcd-gcr-v3.4.7 /bin/sh -c "/usr/local/bin/etcdctl get foo"
+  ```
+
+* 确认安装状态
+
+  ```shell
+  $ etcdctl --endpoints=http://localhost:2379 version
+  ```
+
+## 3.5 集群部署
+
+
+
+# 4 业务实战
+
+
+
+# 5 etcd 相关知识点
+
+## 5.1 kv 存储
+
+* 采用 kv 型数据存储，比关系型存储**速度更快**
+* 支持**动态存储**（内存）以及**静态存储**（磁盘）
+  * **动态存储**：**运行时动态修改**的内容是放到内存中的（动态存储通常指的是在运行时动态地修改和更新存储中的数据）
+  * **静态存储**：**持久化配置（WAL）**（静态存储是指在 etcd 中存储静态数据，这些数据往往是在系统启动或配置更改时设置的，并且在系统运行期间很少或不会发生变化。在 etcd 中，可以使用静态存储来存储和管理系统的持久化配置信息、静态路由规则、静态数据等）
+* **分布式存储**，构建多节点集群（底层使用 raft 一致性协议）
+* 存储方式，使用**目录结构**
+  * **叶子节**点真正**存储数据**，相当于文件
+  * 叶子节点的**父节点**一定是目录，同时不能存储数据
+
+## 5.2 服务注册与发现
+
+**分布式集群中进程或者服务如何能找到对方并建立连接**
+
+* 服务发现
+  * **Service Registry**： 服务注册
+  * **Service Requestor**：服务请求方
+  * **Service Provider**：服务提供方
+* 特性
+  * **强制一致性**，**高可用**（使用 raft 一致性协议来保证）
+  * **注册服务**和**健康状况**的机制：在 etcd 进行注册服务配置，使用可以对注册的配置 key TTL 存活时间（租约 lease），通过**心跳**监控**健康状态**
+  * **查找**和**连接服务**的机制：kv 查询服务。每个服务器上部署 Proxy 模式的 etcd，保证集群服务相互连接
+
+## 5.3 消息发布与订阅
+
+* 消息发布：etcd 的 `watcher` 会在每次**配置修改**的时候**发布消息**
+* 消息订阅：**消息订阅者**（应用）会收到 `wathcer` 发布的消息
+
+## 5.4 分布式通知与协调
+
+* 使用 watcher 机制进行通知
+
+## 5.5 分布式锁
+
+* raft 使其很简单就可以实现**分布式锁**
+  * **保持独占**：etcd 提供一套实现**分布式锁原子**操作 CAS（CompareAndSwap）的 API
+  * **控制时序**：etcd 会按照用户获取锁的先后顺序来分别执行。etcd 提供了一套自动创建有序键的 API
+
+## 5.6 名词概念
+
+* Raft：底层使用的一致性协议
+* Node：每个 Raft 状态机的实例
+* Member：一个 etcd 实例，管理着一个 node，并且可以为客户端提供服务（总体的 etcd 节点的封装）
+* Cluster：etcd 集群
+* Peer：etcd 集群中另外一个 Member 的称呼，raft 中也是对其他 raft 节点的称呼
+* Client：向 etcd 集群发送 HTTP 请求的客户端
+* WAL：预写日志，redis 也有，用来持久化日志的
+* snapshot：快照，持久化数据
+* Proxy：模式，为 etcd 集群提供反向代理服务
+* Leader：raft 的三种节点身份的一个，领导者，通过选举产生，只存在一个
+* Candidate：候选者，参加选举的 Follower 会转变成候选者（在 Leader 心跳超时的时候进行）
+* Follower：追随者，保证强一致性和高可用的从属节点（Leader 通过日志来保证强一致性）
+* Term：Leader 发送日志所在的任期
+* Index：日志的索引，用来保证一致性
 
 # * 参考文档
 
@@ -324,6 +482,8 @@
 [etcd  微服务实践](https://www.cnblogs.com/jiujuan/p/13200898.html)
 
 [官方文档](https://pkg.go.dev/github.com/coreos/etcd/clientv3)
+
+[etcd 安装](https://zhuanlan.zhihu.com/p/144056143)
 
 
 
