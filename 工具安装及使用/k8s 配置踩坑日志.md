@@ -43,7 +43,7 @@
   ```txt
   kubeadm init \
   
-    --apiserver-advertise-address=192.168.122.1  \   # 集群告知地址，master 的地址
+    --apiserver-advertise-address=192.168.18.10  \   # 集群告知地址，master 的地址
   
     --image-repository registry.aliyuncs.com/google_containers \
   
@@ -58,4 +58,46 @@
 
 * 初始化时发生错误：`The HTTP call equal to 'curl -sSL http://localhost:10248/healthz' failed with error: Get "http://localhost:10248/healthz": dial tcp [::1]:10248: connect: connection refused.`
 
-  * 
+  * docker cgroup driver 是 systemd，而 k8s 是 c
+  *  ![image-20240103211822098](C:\github\CPPStudy\src\photo\image-20240103211822098.png)
+
+# 3 centos 设置成静态 ip
+
+* 将虚拟机的网络模式设置成 NET 模式
+
+  ![image-20240103222619494](../src/photo/image-20240103222619494.png)
+
+* 先查看虚拟机网络的**网关和子网**，然后为后续静态 ip 做准备
+
+  * ![image-20240103203359409](../src/photo/image-20240103203359409.png)
+  * ![image-20240103203645928](../src/photo/image-20240103203645928.png)
+  * ![image-20240103203721826](../src/photo/image-20240103203721826.png)
+
+* 先获取 root 权限：`su root`
+
+* 然后去网络配置文件中找到 ensxx 配置文件（ifcfg-ens33）
+
+  * `cd /etc/sysconfig/network-scripts/`，文件在这里面，xx表示数值， ipconfig 中查看的网络适配器的名字就是这个名（ens33，看自己是多少）
+
+* 修改配置文件：`vim ifcfg-ens33`
+
+  * 添加内容
+
+    ```
+    IPADDR=192.168.18.10
+    GATEWAY=192.168.18.2
+    NETMASK=255.255.255.0
+    DNS1=192.168.18.2
+    ```
+
+    修改内容
+
+    ```
+    BOOTPROTO=static
+    ONBOOT=yes
+    ```
+
+    ![image-20240103205028847](../src/photo/image-20240103205028847.png)
+
+* 重启提下网络服务：`service network restart`
+
