@@ -105,4 +105,240 @@
   * **组件定义**相当于 `model` 层，需要获取 `view` 的数据（v-bind & props）才能处理**视图层获取**的数据（属性）
   * `view` 层，`model` 层交互使用过**属性的传递**来做的
 
+
+## slot
+
+* 插槽相当于一个模板中增加了**插槽标签**，可以**动态绑定**其他模板，实现**动态拔插**
+* 实际还是使用属性进行数据的交互
+
+```html
+// 插槽的使用
+<div id="app">
+    // 先放置一个带有插槽的模板
+    <todo>
+        // 将模板插入到对应的插槽 slot=插槽名，将 vue 实例中的数据通过属性传入到组件中
+        <todo-title slot="todo-title" :title="todoTitle"></todo-title>
+        <todo-items slot="todo-items" v-for="item in todoItems" :itme="item"></todo-items>
+    </todo>
+</div>
+
+
+// 一个带有插槽的组件
+// slot 需要绑定插槽的名，上面使用的时候，也需要绑定对应的插槽的名，才能对应
+<script>
+    Vue.component("todo", {
+	template: '<div> \
+        		<slot name="todo-title"></slot> \
+        		<ul> \
+                    <slot name="todo-items"></slot> \
+        </ul> \
+        </div>'
+})
+
+Vue.component("todo-title", {
+	props: ['title'],
+	template: '<div>{{title}}</div>'
+})
+
+Vue.component("todo-itmes", {
+	props:['item'],
+	template: '<li>{{item}}</li>'
+})
+
+
+// vue 实例，用以给视图提供数据等操作
+var vm = new Vue({
+ el: "#app",
+data: {
+    todoTitle: "",
+    todoItems: []
+}
+})
+</script>
+
+```
+
+## 自定义组件
+
+* 组件内**不能直接**使用 `vue` 实例的方法
+
+* 但是通过自定义事件：`v-on:remove="vue function"`， 将**实例化组件**中的事件传入组件中
+
+  * 实际，相当于实例化的组件向组件中**传递了一个事件**（等同于传递属性一样）
+  * 组件通过 `this.$emit('事件名', 参数)` 来捕获事件
+
+  ```html
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <title>Vite App</title>
+    </head>
+    <body>
   
+      <!-- // 插槽的使用 -->
+      <div id="app">
+          <!-- // 先放置一个带有插槽的模板 -->
+          <todo>
+              <!-- // 将模板插入到对应的插槽 slot=插槽名，将 vue 实例中的数据通过属性传入到组件中 -->
+              <todo-title slot="todo-title" :title="todoTitle"></todo-title>
+              <!-- 传入 item 和 index 属性， 组件会获取到这个属性的值 -->
+              <!-- 传入事件，让组件去捕获这个事件 -->
+              <todo-items slot="todo-items" v-for="(item,index) in todoItems" :item="item" :index="index" @remove="removeItems(index)" ></todo-items>
+          </todo>
+      </div>
+  
+  
+  
+  
+      <script src="https://unpkg.com/vue@2"></script>
+      <script>
+      Vue.component("todo", {
+  	    template: '<div> \
+          		<slot name="todo-title"></slot> \
+          		<ul> \
+                  <slot name="todo-items"></slot> \
+                  </ul> \
+              </div>'
+          });
+  
+      Vue.component("todo-title", {
+          props: ['title'],
+          template: '<div>{{title}}</div>'
+      });
+  
+      Vue.component("todo-items", {
+          props:['item', 'index'],
+          // 组件调用组件定义的方法，自定义的方法通过捕获实例化动态传进来的事件来进行操作
+          template: '<li>{{item}}<button @click="removeLi">删除</button></li>',
+          methods: {
+              removeLi: function (index) {
+                  // this.$emit 相当于去捕获了实例化组件传递的事件
+                  this.$emit('remove', index);
+              }
+          }
+      });
+  
+      var vm = new Vue({
+          el: "#app",
+          data: {
+              todoTitle: "编程语言",
+              todoItems: ["java", "python", "go"]
+          },
+          methods: {
+              removeItems: function (index) {
+                  this.todoItems.splice(index, 1);
+              }
+          }
+      });
+      </script>
+  
+    </body>
+  </html>
+  ```
+
+## vue实例 - 元素 - 组件：之间的通信
+
+**v-on，v-bind 是 vue 实例数据和组件之间通信的桥梁**
+
+* **vue 实例**与**元素**绑定，为元素提供**数据**以及**方法**
+* 元素可以**获取绑定**的 vue 实例内的**所有东西**
+* **元素**想要将东西**传给 vue 实例**，就需要进行 v-bind 之类的操作
+* **vue 实例**绑定的元素中的**组件实例**也可以获取 vue 实例的所有东西，**但是**组件（组件只是一个模板）不行
+* **组件实例**要想将东西传给**组件**（模板），就需要通过**属性传递**（v-bind，props）和**事件传递**（v-on，this.$emit）一个实例传递，一个组件捕获
+* 组件中不能直接用外部（`vue` 实例）的任何元素和方法，只能通过 `v-bind` 和 `v-on` 获取
+
+# 网络通信：Axios
+
+* 从浏览器中创建 `XMLHttpRequests`
+* 从 `node.js` 创建 `http` 请求
+* 支持 `Promise API` [JS中链式编程]
+* 拦截请求和响应
+* 转换请求数据和响应数据
+* 取消请求
+* 自动转换 `JSON` 数据
+* 客户端支持防御 `XSRF`（跨站请求伪造）
+
+## 发送请求
+
+* axios
+
+## 获取返回参数
+
+* data() 方法，会自己解析好
+
+## 绑定数据的闪烁问题
+
+### 手动解决
+
+* 没加载之前白屏，使用 `v-clock` 属性
+
+  ```html
+  <style>
+      [v-clock]{
+          display: none;
+      }
+  </style>
+  
+  <div v-clock></div>
+  ```
+
+* 内容不进行显示，在未加载 vue 数据的时候
+
+# 计算属性
+
+**好处：放在内存中执行，相当于缓存**
+
+* 在实例化中的 `computed` 属性中增加计算 `func`
+* 和 `methods` 属性的区别：
+  * 在控制台中，`computed` 是一个**属性**，而不是一个方法，不能被调用
+  * `computed` 计算出来的**结果**被**缓存**在**内存**中
+* `computed` 属性中有内容**修改**（增删改），**缓存失效**，**重新计算**
+* 将**不经常变换**的属性放到计算属性中，提高性能
+
+# vue 实例
+
+## vue 实例的基本功能
+
+* 绑定元素，用来提供数据与方法等
+  * 数据：传给元素
+  * 方法：操作虚拟 dom 等功能，都可以实现
+* 发送请求（axios）
+* 解析请求（data() 方法）
+
+# vue 项目
+
+## 其他文件引用方法
+
+* 暴漏方法：exports（提供给外部访问，相当于 golang 中的大写，只有大写，外部包才能使用）
+* 引用方法：import（导包，整个 js 文件作为一个包，通过**包名**访问其中**暴漏**出来的方法等）
+
+## webpack 打包
+
+* modules 文件存放 js
+  * 多个 js 之间互相依赖
+  * main.js 为最终的 js，从这个 js 为入口，可以找到其他所有的 js
+* webpack.config.js：`webpack` 打包的配置文件
+  * js 入口（entry 参数）
+  * 打包的输出 `./js/bundle.js`（output 中的 filename，用来生成打包好的 js）
+
+```js
+// 将模块导出打包
+
+module.exports = {
+    // entry： 入口
+    entry: "./modules/main.js",
+    output: {
+        filename: "./js/bundle.js"
+    }
+};
+
+// 两种打包方式
+// --mode development  开发打包，代码不紧凑，易查看
+// --mode production   生产环境打包，压缩代码，体积更小
+// 默认 production
+```
+
+## vue-router
+
+**路由管理**
+

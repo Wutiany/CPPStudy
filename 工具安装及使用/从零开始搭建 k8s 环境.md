@@ -6,7 +6,7 @@
 
 ## 1.1 镜像下载
 
-* [centos 7 下载地址]([centos-7.9.2009-isos-x86_64安装包下载_开源镜像站-阿里云 (aliyun.com)](https://mirrors.aliyun.com/centos/7.9.2009/isos/x86_64/?spm=a2c6h.25603864.0.0.3fc0f5adaRLb1C))（阿里云镜像）
+* [centos 7 下载地址](https://mirrors.aliyun.com/centos/7.9.2009/isos/x86_64/?spm=a2c6h.25603864.0.0.3fc0f5adaRLb1C)（阿里云镜像）
 
 ## 1.2 VMWare 配置静态 IP
 
@@ -579,17 +579,17 @@
 
 ## 4.5 不同系统安装 k8s
 
-[kubernetes安装教程]([kubernetes镜像_kubernetes下载地址_kubernetes安装教程-阿里巴巴开源镜像站 (aliyun.com)](https://developer.aliyun.com/mirror/kubernetes))
+[kubernetes镜像_kubernetes下载地址_kubernetes安装教程-阿里巴巴开源镜像站 (aliyun.com)](https://developer.aliyun.com/mirror/kubernetes)
 
 # 5 参考文档
 
-[k8s集群部署]([部署k8s集群（k8s集群搭建详细实践版）-腾讯云开发者社区-腾讯云 (tencent.com)](https://cloud.tencent.com/developer/article/2160663))
+[部署k8s集群（k8s集群搭建详细实践版）-腾讯云开发者社区-腾讯云 (tencent.com)](https://cloud.tencent.com/developer/article/2160663)
 
-[k8s安装]([kubernetes镜像_kubernetes下载地址_kubernetes安装教程-阿里巴巴开源镜像站 (aliyun.com)](https://developer.aliyun.com/mirror/kubernetes))
+[kubernetes镜像_kubernetes下载地址_kubernetes安装教程-阿里巴巴开源镜像站 (aliyun.com)](https://developer.aliyun.com/mirror/kubernetes)
 
-[centos 换源]([centos 7换源_centos linux一健换源-CSDN博客](https://blog.csdn.net/qq_36934489/article/details/117407475#:~:text=三、更换源 1 1、备份原下载源 mv %2Fetc%2Fyum.repos.d%2FCentOS-Base.repo %2Fetc%2Fyum.repos.d%2FCentOS-Base.repo.backup 1 2,-y 1 五、Tips tar.gz 解压 tar -zxvf 1))
+[centos 7换源_centos linux一健换源-CSDN博客](https://blog.csdn.net/qq_36934489/article/details/117407475#:~:text=三、更换源 1 1、备份原下载源 mv %2Fetc%2Fyum.repos.d%2FCentOS-Base.repo %2Fetc%2Fyum.repos.d%2FCentOS-Base.repo.backup 1 2,-y 1 五、Tips tar.gz 解压 tar -zxvf 1)
 
-[node节点无法连接]([k8s入坑之报错（1）解决The connection to the server localhost:8080 was refused - did you specify the right host or port? - muzlei - 博客园 (cnblogs.com)](https://www.cnblogs.com/muzlei/p/16375178.html))
+[k8s入坑之报错（1）解决The connection to the server localhost:8080 was refused - did you specify the right host or port? - muzlei - 博客园 (cnblogs.com)](https://www.cnblogs.com/muzlei/p/16375178.html)
 
 # 6 额外功能
 
@@ -610,5 +610,5 @@
   * /mnt/hgfs 是挂载点
   * -o allow_other 表示普通用户也能访问共享目录
 
-  [主机与VMware 共享文件夹]([主机与VMware虚拟机共享文件夹：解决虚拟机找不到共享文件夹问题 - 知乎 (zhihu.com)](https://zhuanlan.zhihu.com/p/650638983))
+  [主机与VMware虚拟机共享文件夹：解决虚拟机找不到共享文件夹问题 - 知乎 (zhihu.com)](https://zhuanlan.zhihu.com/p/650638983)
 
