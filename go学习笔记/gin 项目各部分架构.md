@@ -71,16 +71,28 @@
 │  ├─logic   // 路由的具体操作逻辑，提供了一个主接口，然后其他的接口分别用不同文件夹写 
 │  │  ├─homepage	// homepage 操作的接口以及逻辑
 │  │  └─user		// user 操作的接口以及逻辑
+<<<<<<< HEAD
 │  ├─mq    // mq 的逻辑
 │  ├─oss   // 对象存储的逻辑
 │  │  └─qiniu
 │  ├─types  // 一些逻辑中用到的类型，放到这里
 │  └─utils  // 工具函数，减少代码冗余
+=======
+│  ├─mq
+│  ├─oss
+│  │  └─qiniu
+│  ├─types
+│  └─utils
+>>>>>>> master
 │      ├─config    // 读取配置文件的功能结构体和函数
 │      ├─debug		// debug 的 print 函数
 │      ├─encrypt	// 抽出来的加密函数
 │      ├─error	// 自定义错误的工具
+<<<<<<< HEAD
 │      └─os    // 系统操作的函数
+=======
+│      └─os
+>>>>>>> master
 ├─storage
 │  └─logs
 └─templates
@@ -207,6 +219,7 @@
 
 ## 路由初始化
 
+<<<<<<< HEAD
 ### 1.路由组件初始化
 
 **路径：api/server/router/user/user.go**
@@ -301,3 +314,11 @@
 **路径：api/server/httputils/httputils.go**
 
 * 主要是这个，这个用来定义**响应的内容**，提供操作**响应结构体**的一些**方法**
+=======
+
+
+
+
+## 逻辑功能接口
+
+>>>>>>> master

@@ -98,7 +98,7 @@
   * `Len` 是当前切片的长度；
   * `Cap` 是当前切片的容量，即 `Data` 数组的大小：
 
-![image-20231108111319690](..\..\CPPStudy\src\photo\image-20231108111319690.png)
+![image-20231108111319690](../src/photo/image-20231108111319690.png)
 
 * **个人理解：**相当于 `slice` 会提前申请一块连续的空间，其中容量有富余，然后通过 `cap` 标记容量，通过 `len` 标记已使用，与 C++ 的 `vector` 类似，不过 C++ 的 `vector` 封装的更加复杂
 
@@ -285,7 +285,7 @@ type mapextra struct {
 
 * 哈希表的数据结构
 
-![image-20231108142041691](..\..\CPPStudy\src\photo\image-20231108142041691.png)
+![image-20231108142041691](../src/photo/image-20231108142041691.png)
 
 * `hmap` 的桶是 `bmap`，每个 `bmap` 都能存 8 个键值对，单个桶装满是，就是使用 `extra.nextOverflow` 中的桶存储溢出的数据
 
@@ -460,13 +460,13 @@ type StringHeader struct {
 
 > 接口是计算机系统中多个组件共享的边界，不同的组件能够在边界上交换信息[1](https://draveness.me/golang/docs/part2-foundation/ch04-basic/golang-interface/#fn:1)。如下图所示，接口的本质是引入一个新的中间层，调用方可以通过接口与具体实现分离，解除上下游的耦合，上层的模块不再需要依赖下层的具体模块，只需要依赖一个约定好的接口
 >
-> ![image-20231108163533887](..\..\CPPStudy\src\photo\image-20231108163533887.png)
+> ![image-20231108163533887](../src/photo/image-20231108163533887.png)
 
 * **interface{}** 有两种：一种包含方法的接口，一种不包含方法的接口（接口**不是任意类型**）
 
 **指针和接口**
 
-![image-20231108165636197](..\..\CPPStudy\src\photo\image-20231108165636197.png)
+![image-20231108165636197](../src/photo/image-20231108165636197.png)
 
 * 结构体指针实现的接口，和接口体实现的接口不能混用，会出现  `“method redeclared”`
 * 结构体实现的接口，可以通过结构体指针来初始化，因为 go 语言本身的特性：对**变量解引用（dereference）**，所以传递进去的就变成了结构体，但是反过来不行，因为 go 不会凭空的创建指针。
@@ -529,11 +529,11 @@ type StringHeader struct {
 
 #### 3.2.3 类型转换
 
-![image-20231108173853665](..\..\CPPStudy\src\photo\image-20231108173853665.png)
+![image-20231108173853665](../src/photo/image-20231108173853665.png)
 
-![image-20231108173918526](..\..\CPPStudy\src\photo\image-20231108173918526.png)
+![image-20231108173918526](../src/photo/image-20231108173918526.png)
 
-![image-20231108173947048](..\..\CPPStudy\src\photo\image-20231108173947048.png)
+![image-20231108173947048](../src/photo/image-20231108173947048.png)
 
 #### 3.2.4 类型断言
 
@@ -690,7 +690,7 @@ type StringHeader struct {
   }
   ```
 
-  ![image-20231114191911246](..\..\CPPStudy\src\image-20231114191911246.png)
+  ![image-20231114191911246](../src/image-20231114191911246.png)
 
 #### 4.1.2 范围循环
 
@@ -825,5 +825,5 @@ type scase struct {
 
 ### 4.5 make 和 new
 
-- `make` 的作用是初始化内置的数据结构，也就是我们在前面提到的切片、哈希表和 Channel[2](https://draveness.me/golang/docs/part2-foundation/ch05-keyword/golang-make-and-new/#fn:2)；
-- `new` 的作用是根据传入的类型分配一片内存空间并返回指向这片内存空间的指针[3](https://draveness.me/golang/docs/part2-foundation/ch05-keyword/golang-make-and-new/#fn:3)；
+- `make` 的作用是初始化内置的数据结构，也就是我们在前面提到的切片、哈希表和 Channel
+- `new` 的作用是根据传入的类型分配一片内存空间并返回指向这片内存空间的指针

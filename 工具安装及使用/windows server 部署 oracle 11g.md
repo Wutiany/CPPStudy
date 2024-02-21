@@ -97,3 +97,55 @@ http://download.oracle.com/otn/nt/oracle11g/112010/win64_11gR2_database_2of2.zip
 ### 3.2 客户端使用
 
 `SQL Plus`
+
+## 4 基本操作
+
+### 4.1 通过 `.sql` 导入表
+
+* 需要进行进行编码转义，转成 `utf8` 打开，然后使用 `GB 23` 编码保存（带中文的情况下）
+
+### 4.2 导入表数据（excel）
+
+* 另存为 `csv` 格式，然后导入
+
+## 5 后端连接
+
+### 5.1 创建用户
+
+* 用户创建
+
+  ```sql
+  create user username identified by password;
+  ```
+
+* 授权
+
+  ```sql	
+  grant connect, resource to username;
+  ```
+
+* 解锁账户
+
+  ```sql
+  alter user username account unlock;
+  ```
+
+* 测试连接
+
+  ```sql
+  connect username/password as sysdba;
+  ```
+
+### 5.2 找不到 `64 bit` 客户端
+
+* 下载客户端，解压之后，将路径加入到环境变量
+  * 解决方法地址：https://odpi-c.readthedocs.io/en/latest/user_guide/installation.html#windows
+  * windows 客户端地址：https://www.oracle.com/database/technologies/instant-client/winx64-64-downloads.html
+
+### 5.3 连接问题
+
+#### 5.3.1 ORA-12638: 身份证明检索失败
+
+* 在 `/product/11.2.0/dbhome_1/NETWORK/ADMIN` 中找到 `sqlnet.ora` 文件，修改其中的 `SQLNET.AUTHENTICATION_SERVICES= (NTS)`  成 `SQLNET.AUTHENTICATION_SERVICES= (NONE)`
+
+> SQLNET.AUTHENTICATION_SERVICES 表示oracle使用哪种验证方式，NTS表示采用本地操作系统认证，NONE表示将采用口令文件方式认证。设定了none后，本地的操作系统认证将不被许可，oracle将采用口令文件认证(此时 remote_login_passwordfile=exclusive)如connect /as sysdba 登录，后报错RA-01031: insufficient privileges，实际上是要求你输入sysdba的用户名和密码
