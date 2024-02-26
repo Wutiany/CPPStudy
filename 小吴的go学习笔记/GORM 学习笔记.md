@@ -2694,3 +2694,22 @@ db.Model(&users).Association("Team").Replace(&userA, &userB, &[]User{userA, user
 
 # 2 使用教程
 
+## 2.1 使用中的问题
+
+### 2.1.1 表与结构体
+
+* **模型结构体名字**的 `s` 形式是**表名**
+
+  ```go
+  type table struct {
+      id int
+  }
+  
+  // 表名 tables, 这段代码所查的表是 tables
+  var Table []table
+  
+  // Table 这个名字对表名没有影响，查哪个表和 table 单个元素名有关
+  db.Find(&Table)
+  ```
+
+* 所以在创建表的时候**表名**统一 + `s`
