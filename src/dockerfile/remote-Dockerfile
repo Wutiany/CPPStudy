@@ -1,0 +1,17 @@
+FROM golang:1.21.2 as builder
+
+LABEL stage=gobuilder
+
+ENV CGO_ENABLED 0
+ENV GOOS linux
+ENV GOPROXY https://goproxy.cn,direct
+
+WORKDIR /build/dev
+
+COPY . .
+RUN sh -c "[ -f go.mod ]" || exit
+COPY etc /app/etc
+COPY templates /app/templates
+COPY static /app/static
+RUN go mod tidy
+RUN go build -ldflags="-s -w" -o /app/codewithmedia cmd/main.go
