@@ -1,0 +1,875 @@
+<!doctype html>
+<html>
+<head>
+<meta charset='UTF-8'><meta name='viewport' content='width=device-width initial-scale=1'>
+<title>小吴修仙传之算法篇</title>
+</head>
+<body><h1 id='小吴修仙传之算法篇'>小吴修仙传之算法篇</h1>
+<h1 id='数组字符串'>数组/字符串</h1>
+<h2 id='合并两个有序数组'>合并两个有序数组</h2>
+<p><a href='https://leetcode.cn/problems/merge-sorted-array/'>88. 合并两个有序数组</a></p>
+<h3 id='1-利用-sort-函数快排不推荐）'>1 利用 sort 函数（快排，不推荐）</h3>
+<ol start='' >
+<li><p>将数组2的数据<strong>合并</strong>到数组1</p>
+</li>
+<li><p>使用 sort 函数对数组1进行<strong>排序</strong></p>
+<ul>
+<li>C++使用的是 <code>sort</code> 函数：<code>sort(nums1.begin(), nums1.end());</code></li>
+<li>Golang使用的是 <code>sort.Slice</code> 函数：<code>sort.Slice(nums1, func(i, j int){ return nums1[i] &lt; nums2[j]})</code></li>
+
+</ul>
+</li>
+
+</ol>
+<h3 id='2-双指针使用辅助空间空间复杂度-omn）'>2 双指针，使用辅助空间（空间复杂度 O(m+n)）</h3>
+<ol start='' >
+<li>构建一个 <code>m + n</code> 的辅助空间</li>
+<li>利用双指针，比较 <code>nums1</code> 与 <code>nums2</code>，放到辅助空间中</li>
+<li>最后将辅助空间的数组拷贝到 <code>nums1</code> 中</li>
+
+</ol>
+<h3 id='3-逆向双指针空间复杂度-o1推荐）'>3 逆向双指针（空间复杂度 O(1)，推荐）</h3>
+<p><strong>利用 nums1 中的数组尾部为空可以作为暂存的辅助空间来进行排序，先排最大的，放到辅助空间</strong></p>
+<ol start='' >
+<li><p>实际是三指针</p>
+<ul>
+<li><code>nums1</code> 的逆向下表存储的指针（idx）：用来标记当前存放元素的位置</li>
+<li><code>nums1</code> 的数组实际下表指针（i）：用来标记比较到的位置</li>
+<li><code>nums2</code> 的数组实际下表指针（j）：用来标记比较到的位置</li>
+
+</ul>
+</li>
+<li><p>需要考虑两种情况</p>
+<p>（1）<code>nums2</code> 遍历结束，<code>nums1</code> 遍历没结束（使用 <code>nums2</code> 数组的下表判断是否超出范围，超出范围直接结束，因为 <code>nums2</code> 排完序之后，<code>nums1</code> 就不需要排序了）</p>
+<p><img src="D:\github\CPPStudy\src\photo\算法篇-合并数组2.png" style="zoom:50%;" /></p>
+<p>（2）nums1 遍历结束，但是 nums2 遍历没结束，即 nums1 的下表超出范围</p>
+<p><img src="../src/photo/算法篇-合并数组1.png" style="zoom:50%;" /></p>
+<ol start='3' >
+<li>从两个数组的最后向前遍历，同时移动 <code>idx</code> 指针</li>
+
+</ol>
+<pre><code class='language-go' lang='go'>func merge(nums1 []int, m int, nums2 []int, n int)  {
+    idx, i, j := m + n - 1, m - 1, n - 1
+    for ; idx &gt;= 0 &amp;&amp; j &gt;= 0; idx-- {
+        if i &lt; 0 &amp;&amp; j &gt;= 0 {
+            nums1[idx] = nums2[j]
+            j--
+            continue
+        }
+        if nums1[i] &gt;= nums2[j] {
+            nums1[idx] = nums1[i]
+            i--
+        } else {
+            nums1[idx] = nums2[j]
+            j--
+        }
+    }
+}
+</code></pre>
+</li>
+
+</ol>
+<h2 id='删除有序数组中的重复项-ⅱ'>删除有序数组中的重复项 Ⅱ</h2>
+<p><a href='https://leetcode.cn/problems/remove-duplicates-from-sorted-array-ii/'>80. 删除有序数组中的重复项 II</a></p>
+<p>使用快慢指针：重复项，一般都需要前驱标志位来比较是否重复，重复次数，一般需要计数标志位</p>
+<ol start='' >
+<li>快慢指针：快指针用来遍历数组，慢指针用来标记新数组（下一个可以放置符合条件元素的位置）</li>
+<li>前驱标志位：用来记录上一个元素的值，用来比较快指针遍历到的元素是否与上一个元素重复</li>
+<li>计数标志位：用来记录与前驱标志位重复的次数</li>
+
+</ol>
+<p>需要判断的三种情况：</p>
+<ol start='' >
+<li>重复且不超过两次的情况：不超过两次都是符合题意，使用这个元素构建新数组</li>
+<li>重复且超过两次的情况：直接跳过这个元素</li>
+<li>不相等的情况：需要同时修改前驱标志位，计数标志位，同时使用这个元素构建新数组</li>
+
+</ol>
+<pre><code class='language-go' lang='go'>func removeDuplicates(nums []int) int {
+    count := 1
+    pre := nums[0]
+    left, right := 1, 1
+
+    for ; right &lt; len(nums); right++ {
+        // 相等的情况，重复不超过两次，增加计数
+        if nums[right] == pre &amp;&amp; count &lt; 2 {
+            nums[left] = pre
+            left++
+            count++
+        } else if nums[right] == pre &amp;&amp; count &gt;= 2 {   // 相等的情况，重复超过了两次，增加技术，只修改右指针
+            count++
+        } else {     // 不相等的情况，需要 增加计数，修改左指针，以及 pre
+            nums[left] = nums[right]
+            left++
+            pre = nums[right]
+            count = 1
+        }
+    }
+    return left
+}
+</code></pre>
+<h2 id='最后一个单词的长度'>最后一个单词的长度</h2>
+<p><a href='https://leetcode.cn/problems/length-of-last-word/'>58. 最后一个单词的长度</a></p>
+<p>直接通过 <code>&quot; &quot;</code> 切分字符串，然后判断最后一个</p>
+<ul>
+<li>golang 的 <code>Split</code> 切分后要考虑  <code>&quot;&quot;</code> 的存在</li>
+
+</ul>
+<p>&nbsp;</p>
+<h1 id='双指针'>双指针</h1>
+<h2 id='判断子序列'>判断子序列</h2>
+<p><a href='https://leetcode.cn/problems/is-subsequence/'>392. 判断子序列</a></p>
+<p>双指针，直接顺序判断另一个数组中，是否按序出现子序列的所有字符</p>
+<p><strong>注意</strong>：s 长度为 0 的情况，需要判断</p>
+<h2 id='两数之和ⅱ---输入有序数组'>两数之和Ⅱ - 输入有序数组</h2>
+<p><a href='https://leetcode.cn/problems/two-sum-ii-input-array-is-sorted/'>167. 两数之和 II - 输入有序数组</a></p>
+<p>双指针，从数组两端求和，向中间靠拢</p>
+<ul>
+<li>当和大于 <code>target</code>，则右指针移动，减小 <code>sum</code></li>
+<li>当和小于 <code>target</code>，则左指针移动，增加 <code>sum</code></li>
+
+</ul>
+<h2 id='验证回文串'>验证回文串</h2>
+<p><a href='https://leetcode.cn/problems/valid-palindrome/'>125. 验证回文串</a></p>
+<p>双指针，从中间向两端扩散</p>
+<ul>
+<li><p>字符串大小写字母转换：通过 byte 计算 <code>&#39;C&#39; - &#39;A&#39;</code></p>
+<ul>
+<li>golang 中 <code>strings.ToLower</code> 用来转换大小写</li>
+<li>C++ 中 <code>tolower</code> 来转换大小写</li>
+<li>C++ 中 <code>isalnum</code> 来判断是否是字母和数字</li>
+
+</ul>
+</li>
+<li><p>双指针扩散，中间位置定位（len(str)%2 是否等于 1， 偶数两个不同，奇数两个相同）</p>
+</li>
+
+</ul>
+<p>反转字符串，判断是否相等</p>
+<p>&nbsp;</p>
+<h1 id='滑动窗口'>滑动窗口</h1>
+<h2 id='无重复字符的最长字串'>无重复字符的最长字串</h2>
+<p><a href='https://leetcode.cn/problems/longest-substring-without-repeating-characters/'>3. 无重复字符的最长子串</a></p>
+<p>双指针，进行收缩窗口，如果记录中存在了扩展窗口的字符，就需要进行收缩窗口</p>
+<ul>
+<li><p>左右指针</p>
+<ul>
+<li>左指针代表收缩窗口指针：要明确指针其实位置代表的意义（左指针到了当前的位置，就从记录中去掉这个字符，那起始指针的下标就是 -1）</li>
+<li>右指针代表扩张窗口指针：要明确扩张指针下标代表的意义（右指针到了当前位置，就从记录中加入这个字符，那起始指针的下标就是 -1）</li>
+
+</ul>
+</li>
+<li><p>收缩扩张逻辑：</p>
+<ul>
+<li>扩张：每次右指针都进行扩张，所以每次循环开始的时候指针下标都要 +1（-1 作为起始下标）</li>
+<li>收缩：每次扩张之后，如果记录中有这扩张的这个字符，那么就需要收缩，收缩到记录中没有这个字符为止，即记录子串的所有字符都是唯一的</li>
+
+</ul>
+</li>
+
+</ul>
+<p><img src="../src/photo/无重复字符的最长字串.png" referrerpolicy="no-referrer"></p>
+<pre><code class='language-go' lang='go'>func lengthOfLongestSubstring(s string) int {
+    maxLength := 0
+    lenght := 0
+    left, right := -1, -1
+    record := map[rune]bool{}
+    sSlice := []rune(s)
+
+    if len(s) == 0 {
+        return maxLength
+    }
+
+    for right &lt; len(s)-1 {
+        // 右滑动
+        right++
+        lenght++
+
+        if value, ok := record[sSlice[right]]; ok == false || ok == true &amp;&amp; value == false {
+            record[sSlice[right]] = true
+        } else {
+            // 收缩: 存在 key 的情况
+            for left &lt; right {
+                left++
+                lenght--
+                if sSlice[left] == sSlice[right] {
+                    break
+                }
+                record[sSlice[left]] = false
+            }
+        }
+        maxLength = max(maxLength, lenght)
+    }
+    return maxLength
+
+}
+
+func max(maxLength, lenght int) int {
+    if maxLength &gt; lenght {
+        return maxLength
+    } else {
+        return lenght
+    }
+}
+</code></pre>
+<p>&nbsp;</p>
+<h1 id='矩阵'>矩阵</h1>
+<p>&nbsp;</p>
+<h1 id='哈希表'>哈希表</h1>
+<h2 id='单词规律'>单词规律</h2>
+<p><a href='https://leetcode.cn/problems/word-pattern/'>290. 单词规律</a></p>
+<p>使用哈希表记录模式对应的单词，验证存在的模式是否单词也对应</p>
+<ul>
+<li>要注意模式与单词长度是否对应</li>
+<li>要注意不同模式的单词一定不同</li>
+
+</ul>
+<p>&nbsp;</p>
+<h1 id='区间'>区间</h1>
+<p>&nbsp;</p>
+<h1 id='栈'>栈</h1>
+<h2 id='简化路径'>简化路径</h2>
+<p><a href='https://leetcode.cn/problems/simplify-path/'>71. 简化路径</a></p>
+<p>将路径节点根据条件出栈入栈</p>
+<p>注意：C++ 需要自己实现 <code>split</code>，因此要注意最后一个节点不能通过 <code>&#39;/&#39;</code> 去判断的情况</p>
+<p>Golang 要注意一个问题，使用 <code>Split</code> 之后，会切分出 <code>&quot;&quot;</code> 的情况，所以需要判断</p>
+<h2 id='二叉树的后序遍历'>二叉树的后序遍历</h2>
+<p><a href='https://leetcode.cn/problems/binary-tree-postorder-traversal/'>145. 二叉树的后序遍历</a></p>
+<p>二叉树的后序遍历<strong>不使用递归</strong>的方法</p>
+<p>后序遍历：左右根  --&gt;  换种思路，使用先序遍历的方式： 根右左，然后使用栈，倒转一下</p>
+<p>一直向右，每次到叶子节点，换成向左</p>
+<p><img src="../src/photo/二叉树的后序遍历.png" referrerpolicy="no-referrer"></p>
+<pre><code class='language-go' lang='go'>/**
+ * Definition for a binary tree node.
+ * type TreeNode struct {
+ *     Val int
+ *     Left *TreeNode
+ *     Right *TreeNode
+ * }
+ */
+func postorderTraversal(root *TreeNode) []int {
+    // 双栈后序遍历
+    // 后序遍历   左右根   --&gt;  根右左
+    stackOne := stack{
+        len: 0,
+        container: []interface{}{},
+    }
+    stackTwo := stack{
+        len: 0,
+        container: []interface{}{},
+    }
+
+    cur := root
+
+    for cur != nil || !stackOne.IsEmpty() {
+        // 一直向右遍历
+        for cur != nil {
+            stackOne.Push(cur)
+            stackTwo.Push(cur.Val)
+            cur = cur.Right
+        }
+		
+        // 每次遇到最右边的节点，通过 pop 方法获取最右边的节点，更换成左边节点，继续向右遍历，每向右到叶子节点，就更换一次左节点
+        if !stackOne.IsEmpty() {
+            cur = stackOne.Pop().(*TreeNode)
+            cur = cur.Left
+        }
+    }
+
+    ret := []int{}
+    for !stackTwo.IsEmpty() {
+        tempNode := stackTwo.Pop().(int)
+        ret = append(ret, tempNode)
+    }
+    return ret
+
+}
+
+type stack struct {
+    len int
+    container []interface{}
+}
+
+func (s *stack) Push(node interface{}) {
+    s.container = append(s.container, node)
+    s.len++
+}
+
+func (s *stack) Pop() interface{} {
+    tempNode := s.container[s.len-1]
+    if s.len == 1 {
+        s.container = []interface{}{}
+    } else {
+        s.container = s.container[0: s.len-1]
+    }
+    s.len--
+    return tempNode
+}
+
+func (s *stack) IsEmpty() bool {
+    return s.len == 0
+}
+</code></pre>
+<p>&nbsp;</p>
+<h1 id='链表'>链表</h1>
+<h2 id='两个链表的第一个公共节点'>两个链表的第一个公共节点</h2>
+<p><a href='https://www.nowcoder.com/practice/6ab1d9a29e88450685099d45c9e31e46?tpId=295&amp;tqId=23257&amp;ru=/exam/company&amp;qru=/ta/format-top101/question-ranking&amp;sourceUrl=%2Fexam%2Fcompany'>BM10 两个链表的第一个公共结点</a></p>
+<p>双指针：len(第一个链表的长度 + 第二个链表的长度) = len(第二个链表的长度 + 第一个链表的长度)，两者没有交点，那这个长度之后就指向 nil，如果有交点，在同一长度就能相遇</p>
+<p><img src="../src/photo/两个链表的第一个公共节点.png" referrerpolicy="no-referrer"></p>
+<pre><code class='language-go' lang='go'>func FindFirstCommonNode( pHead1 *ListNode ,  pHead2 *ListNode ) *ListNode {
+    // write code here
+    tempNode1 := pHead1
+    tempNode2 := pHead2
+
+    for tempNode1 != tempNode2 {
+        if tempNode1 == nil {
+            tempNode1 = pHead2
+        } else {
+            tempNode1 = tempNode1.Next
+        }
+        if tempNode2 == nil {
+            tempNode2 = pHead1
+        } else {
+            tempNode2 = tempNode2.Next
+        }
+    }
+
+    // 两个长度相同，没有相遇的点，就是全NULL
+    return tempNode1
+}
+</code></pre>
+<p>&nbsp;</p>
+<h1 id='二叉树'>二叉树</h1>
+<h2 id='从中序与后序遍历序列构造二叉树'>从中序与后序遍历序列构造二叉树 </h2>
+<p><a href='https://leetcode.cn/problems/construct-binary-tree-from-inorder-and-postorder-traversal/'>106. 从中序与后序遍历序列构造二叉树</a></p>
+<p>先找根节点</p>
+<ul>
+<li>后序遍历的最后一个节点，就是根节点</li>
+
+</ul>
+<p>再根据根节点拆分左右子树</p>
+<ul>
+<li><p>通过后续遍历找到的根节点去找中序遍历的根节点所在，中序遍历根节点的左右两侧就是左右子树</p>
+</li>
+<li><p>后续遍历的左右子树划分的方法</p>
+<ul>
+<li>中序遍历的左右子树的长度，与后序遍历的左右子树长度相等</li>
+<li>后续遍历的最前面就是左子树，后续遍历选完左子树，剩下的就是右子树，通过中序遍历的长度去选</li>
+
+</ul>
+</li>
+
+</ul>
+<p><img src="../src/photo/从中序与后序遍历序列构造二叉树.png" referrerpolicy="no-referrer"></p>
+<pre><code class='language-go' lang='go'>/**
+ * Definition for a binary tree node.
+ * type TreeNode struct {
+ *     Val int
+ *     Left *TreeNode
+ *     Right *TreeNode
+ * }
+ */
+func buildTree(inorder []int, postorder []int) *TreeNode {
+    if len(inorder) == 0 {
+        return nil
+    }
+
+    // 后续遍历的最后一个是根节点
+    // 中序遍历的这个节点左边是左子树，右边是右子树
+    
+    // TODO: 找根节点
+    n := len(postorder) - 1
+    root := postorder[n]
+
+    // TODO: 构建根节点
+    rootNode := &amp;TreeNode{
+        Val: root,
+    }
+
+    // TODO: 找 inorder 的左右子树
+    var tempInorderLeft []int
+    var tempPostorderLeft []int
+    var tempInorderRight []int
+    var tempPostorderRight []int
+    for idx, node := range inorder {
+        // 暂存左子树
+        if node == root &amp;&amp; idx - 1 &gt;= 0 {
+            tempInorderLeft = inorder[0: idx]
+            tempPostorderLeft = postorder[0: len(tempInorderLeft)]
+        }
+        // 暂存右子树
+        if node == root &amp;&amp; idx + 1 &lt; len(inorder) {
+            tempInorderRight = inorder[idx+1:]
+            tempPostorderRight = postorder[len(tempInorderLeft): len(tempInorderLeft)+len(tempInorderRight)]
+
+        }
+    } 
+
+    // TODO: 找 postorder 的左右子树, 不用找，直接算
+    // Q: 不能选 0 怎么办
+    rootNode.Left = buildTree(tempInorderLeft, tempPostorderLeft)
+    rootNode.Right = buildTree(tempInorderRight, tempPostorderRight)
+    return rootNode
+}
+</code></pre>
+<h2 id='对称二叉树'>对称二叉树</h2>
+<p><a href='https://leetcode.cn/problems/symmetric-tree/'>101. 对称二叉树</a></p>
+<p>镜像问题，通过将对称的部分反转来对比即可</p>
+<p><img src="../src/photo/对称二叉树.png" referrerpolicy="no-referrer"></p>
+<h2 id='二叉树的最近公共祖先'>二叉树的最近公共祖先</h2>
+<p><a href='https://leetcode.cn/problems/lowest-common-ancestor-of-a-binary-tree/'>236. 二叉树的最近公共祖先</a></p>
+<p>使用后序遍历，最后判断当前节点的左右子树是否存在于给定两个节点相等的节点。</p>
+<ul>
+<li>退出条件：当前节点（root）到叶子节点下了（nil），或者当前节点等于给定节点之一</li>
+
+</ul>
+<p>相当于一个左右子树<strong>节点上浮</strong>的操作</p>
+<p><img src="../src/photo/二叉树的最近公共祖先.png" referrerpolicy="no-referrer"></p>
+<pre><code class='language-go' lang='go'>/**
+ * Definition for a binary tree node.
+ * type TreeNode struct {
+ *     Val int
+ *     Left *TreeNode
+ *     Right *TreeNode
+ * }
+ */
+ func lowestCommonAncestor(root, p, q *TreeNode) *TreeNode {
+    if root == nil || root == q || root == p {
+        return root
+    }
+
+    left := lowestCommonAncestor(root-&gt;Left, p, q)
+    right := lowestCommonAncestor(root-&gt;Right, p, q)
+	
+     // 后序遍历，到最下层的叶子节点，然后进行节点上浮
+    if right != nil &amp;&amp; left != nil {
+        return root
+    } else if left != nil {
+        return left
+    } else {
+        return right
+    }
+}
+</code></pre>
+<h2 id='反转二叉树'>反转二叉树</h2>
+<p><a href='https://leetcode.cn/problems/invert-binary-tree/'>226. 翻转二叉树</a></p>
+<p><strong>后序遍历</strong>，获取当前节点的左右子树，然后对当前的左右子树进行转换，返回当前节点。</p>
+<p>&nbsp;</p>
+<h1 id='二叉树层序遍历'>二叉树层序遍历</h1>
+<h2 id='二叉树的层平均值'>二叉树的层平均值</h2>
+<p><a href='https://leetcode.cn/problems/average-of-levels-in-binary-tree/'>637. 二叉树的层平均值</a></p>
+<p>使用队列来遍历每一层</p>
+<ul>
+<li>需要记录上一层的数量，用来进出队列遍历每一层</li>
+<li>golang 封装一个 <code>slice</code> 的结构体来实现队列</li>
+
+</ul>
+<pre><code class='language-go' lang='go'>/**
+ * Definition for a binary tree node.
+ * type TreeNode struct {
+ *     Val int
+ *     Left *TreeNode
+ *     Right *TreeNode
+ * }
+ */
+func averageOfLevels(root *TreeNode) []float64 {
+    queue := new(Queue)
+    queue.Length = 0
+    queue.Push(root)
+    layerNum := 1
+    layerSum := root.Val
+    var ret []float64
+
+    for !queue.IsEmpty() {
+        avg := float64(layerSum)/float64(layerNum)
+        ret = append(ret, avg)
+        layerSum = 0
+        num := 0
+        for i := 0; i &lt; layerNum; i++ {
+            tail := queue.Pop()
+            if tail.Left != nil {
+                queue.Push(tail.Left)
+                num++
+                layerSum += tail.Left.Val
+
+            }
+            if tail.Right != nil {
+                queue.Push(tail.Right)
+                num++
+                layerSum += tail.Right.Val
+            }
+        } 
+        layerNum = num
+    }
+    
+    return ret
+}
+
+type Queue struct {
+    Q []*TreeNode
+    Length int
+}
+
+func (q *Queue) Pop() *TreeNode {
+    tail := q.Q[0]
+    q.Q = q.Q[1:]
+    q.Length--
+    return tail
+}
+
+func (q *Queue) Push(node *TreeNode) {
+    q.Q = append(q.Q, node)
+    q.Length++
+}
+
+func (q *Queue) IsEmpty() bool {
+    return q.Length == 0
+}
+</code></pre>
+<p>&nbsp;</p>
+<h1 id='二叉搜索树'>二叉搜索树</h1>
+<p>&nbsp;</p>
+<h1 id='图'>图</h1>
+<p>&nbsp;</p>
+<h1 id='图的广度优先搜索'>图的广度优先搜索</h1>
+<p>&nbsp;</p>
+<h1 id='字典树'>字典树</h1>
+<h2 id='实现trie前缀树）'>实现Trie（前缀树）</h2>
+<p><a href='https://leetcode.cn/problems/implement-trie-prefix-tree/'>208. 实现 Trie (前缀树)</a></p>
+<p>树节点结构体：</p>
+<p>（1）isEnd：用来表示每个单词的结尾</p>
+<p>（2）[26]*Trie：用来作为字符的节点</p>
+<p>实现思路：由于全是小写字母，所以将字符串拆分成单个字母，<code>T rie</code> 节点用来存储字母。通过字母对应的数组下标来遍历这棵树</p>
+<ul>
+<li>每个 <code>Trie</code> 节点有一个存储下一个字符节点的数组</li>
+<li>数组有长度对应着字母，下标对应字母（a-a，为 0 下标），a-0，b-1，c-2</li>
+<li>注意，<code>Constructor</code> 构建的 <code>Trie</code> 根，需要通过这个 <code>Trie</code> 根来访问 <code>Trie</code> 字符节点</li>
+
+</ul>
+<p><img src="../src/photo/trie.png" referrerpolicy="no-referrer"></p>
+<pre><code class='language-go' lang='go'>type Trie struct {
+    isEnd bool
+    root [26]*Trie
+}
+
+
+func Constructor() Trie {
+    return Trie{
+        isEnd: false,
+        root: [26]*Trie{},
+    }
+}
+
+
+func (this *Trie) Insert(word string)  {
+    byteWord := []byte(word)
+    var tempNode *Trie
+    if this.root[byteWord[0]-&#39;a&#39;] == nil {
+        this.root[byteWord[0]-&#39;a&#39;] = &amp;Trie{
+            isEnd: false,
+            root: [26]*Trie{},
+        }
+    }
+    // 遍历每个节点
+    for i := 0; i &lt; len(byteWord); i++ {
+        // 判断第一个节点，因为需要从根节点获取节点信息
+        if i == 0 {
+            tempNode = this.root[byteWord[i]-&#39;a&#39;]
+            continue
+        }
+
+        // tempNode 是上一个节点，判断上个节点能否为当前 char 提供节点来存储
+        if tempNode.root[byteWord[i]-&#39;a&#39;] == nil {
+            tempNode.root[byteWord[i]-&#39;a&#39;] = &amp;Trie{
+                isEnd: false,
+                root: [26]*Trie{},
+            }
+        }
+
+        // 更新节点
+        tempNode = tempNode.root[byteWord[i]-&#39;a&#39;]
+    }
+
+    // 最后一个节点
+    tempNode.isEnd = true
+}
+
+
+func (this *Trie) Search(word string) bool {
+    // 同上
+    byteWord := []byte(word)
+    var tempNode *Trie
+
+    // 提前判断
+    if this.root[byteWord[0]-&#39;a&#39;] == nil {
+        return false
+    }
+
+    // 遍历每个节点
+    for i := 0; i &lt; len(byteWord); i++ {
+        // 判断第一个节点，因为需要从根节点获取节点信息
+        if i == 0 {
+            tempNode = this.root[byteWord[i]-&#39;a&#39;]
+            continue
+        }
+
+        if tempNode.root[byteWord[i]-&#39;a&#39;] == nil {
+            return false
+        }
+        // 更新节点
+        tempNode = tempNode.root[byteWord[i]-&#39;a&#39;]
+    }
+
+    // 最后一个节点
+    if !tempNode.isEnd {
+        return false
+    }
+    return true
+
+}
+
+
+func (this *Trie) StartsWith(prefix string) bool {
+        // 同上
+    byteWord := []byte(prefix)
+    var tempNode *Trie
+
+    // 提前判断
+    if this.root[byteWord[0]-&#39;a&#39;] == nil {
+        return false
+    }
+
+    // 遍历每个节点
+    for i := 0; i &lt; len(byteWord); i++ {
+        // 判断第一个节点，因为需要从根节点获取节点信息
+        if i == 0 {
+            tempNode = this.root[byteWord[i]-&#39;a&#39;]
+            continue
+        }
+
+        if tempNode.root[byteWord[i]-&#39;a&#39;] == nil {
+            return false
+        }
+        // 更新节点
+        tempNode = tempNode.root[byteWord[i]-&#39;a&#39;]
+    }
+
+    return true
+}
+</code></pre>
+<p>&nbsp;</p>
+<h1 id='回溯'>回溯</h1>
+<h2 id='全排列'>全排列</h2>
+<p><a href='https://leetcode.cn/problems/permutations/'>46. 全排列</a></p>
+<p>放球问题，列表中的元素相当于球，列表长度，相当于桶，将列表的球放到列表对应的桶中有多少中方法，第一个桶每个球都可以放一次，第二个桶，除了第一个桶正在放着的球，其他球都能在放进去<code>N！</code></p>
+<ul>
+<li>使用一个标记球是否使用的列表 <code>used</code></li>
+<li>使用一个放球的列表用来存入球</li>
+<li>使用过的球（使用过几号球）通过下标来标记是否使用</li>
+<li>回溯：从访求的列表拿出来，然后取消标记</li>
+
+</ul>
+<p><img src="../src/photo/全排列.png" referrerpolicy="no-referrer"></p>
+<pre><code class='language-go' lang='go'>// 注：golang 代码，因为 slice 内存地址的问题，所以会出现使用原地址指针的问题，所以需要使用 copy 拷贝一到新的 slice 中
+func permute(nums []int) [][]int {
+    ret := [][]int{}
+    used := make([]bool, len(nums))
+    
+    var dfs func([]int)
+    dfs = func(num []int) {
+        if len(num) == len(nums) {
+            slice := make([]int, len(nums))
+            copy(slice, num)
+            ret = append(ret, slice)
+            return  
+        }
+
+        for i := 0; i &lt; len(nums); i++ {
+            if used[i] {
+                continue
+            }
+
+            used[i] = true
+            num = append(num, nums[i])
+            dfs(num)
+            // 回溯
+            used[i] = false
+            if len(num) == 1 {
+                num = []int{}
+            } else {
+                num = num[0: len(num)-1]
+            }
+        }
+    }
+
+    dfs([]int{})
+    return ret
+}
+</code></pre>
+<h2 id='全排列ⅱ'>全排列Ⅱ</h2>
+<p><a href='https://leetcode.cn/problems/permutations-ii/'>47. 全排列 II</a></p>
+<p>同样的放球问题，不过要去重，在原本的代码基础上，去除重复项（两个球同颜色）</p>
+<ul>
+<li>去重的第一步，要对数组进行排序</li>
+<li>在对下一个相同的作为起点进行排序的时候，前面相同的会被重新放一次，所以如果前面的未使用，这种情况就需要跳出</li>
+
+</ul>
+<p><img src="../src/photo/全排列Ⅱ.png" referrerpolicy="no-referrer"></p>
+<pre><code class='language-go' lang='go'>func permuteUnique(nums []int) [][]int {
+    ret := [][]int{}
+    var dfs func([]int) 
+
+    // 排序，去重
+    sort.Ints(nums)
+
+    // 穷举剪枝法
+    // 穷举用到的记录标志位: 用来记录那个球被放进去了, 下标表示球号
+    used := make([]bool, len(nums))
+
+    dfs = func(num []int) {
+        if len(num) == len(nums) {
+            slice := make([]int, len(nums))
+            copy(slice, num)
+            ret = append(ret, slice)
+            return 
+        }
+
+        // 穷举
+        for i := 0; i &lt; len(nums); i++ {
+            // 去除重复的元素
+            if used[i] || i &gt; 0 &amp;&amp; nums[i] == nums[i-1] &amp;&amp; !used[i-1] {
+                continue
+            }
+
+            // 没用过，要放进去
+            used[i] = true
+            num = append(num, nums[i])
+            dfs(num)
+            // 回溯，把球拿出来
+            if len(num) == 1 {
+                num = []int{}
+            } else {
+                num = num[0:len(num)-1]
+            }
+            used[i] = false
+        }
+    }
+
+    dfs([]int{})
+    return ret
+}
+</code></pre>
+<p>&nbsp;</p>
+<h1 id='分治'>分治</h1>
+<p>&nbsp;</p>
+<h1 id='kadane算法'>Kadane算法</h1>
+<p>&nbsp;</p>
+<h1 id='二分查找'>二分查找</h1>
+<p>&nbsp;</p>
+<h1 id='堆'>堆</h1>
+<p>&nbsp;</p>
+<h1 id='位运算'>位运算</h1>
+<p>&nbsp;</p>
+<h1 id='数学'>数学</h1>
+<p>&nbsp;</p>
+<h1 id='一维动态规划'>一维动态规划</h1>
+<h2 id='单词拆分'>单词拆分</h2>
+<p><a href='https://leetcode.cn/problems/word-break/'>139. 单词拆分</a></p>
+<p>使用集合或者哈希表存储给定的单词，然后构建一个用于动归的辅助列表，用来标记能否进行标记的结果。动归的方式：外层遍历字符串的长度，用来确定字符串当前位置是否能够拼接成功；内层遍历当前位置的前面所有位置，判断前面的位置和前面位置到当前位置能否拼接成功。</p>
+<p><img src="../src/photo/单词拆分.png" referrerpolicy="no-referrer"></p>
+<ul>
+<li>辅助数组通常是需要的结果</li>
+<li>本质是遍历前面已经拼接过的位置，看这个位置是否拼接成功，这个位置后面的是否能拼接</li>
+
+</ul>
+<pre><code class='language-go' lang='go'>func wordBreak(s string, wordDict []string) bool {
+    wordDictSet := map[string]bool{}
+    for _, word := range wordDict {
+        wordDictSet[word] = true    
+    }
+
+    // 用于动归的辅助数组
+    dp := make([]bool, len(s)+1)
+    // 起始条件
+    dp[0] = true
+
+    // 思路：前面 j 与 后面的那一段，在单词表中出现过，能拼接成
+    // 外层循环的是长度
+    for i := 1; i &lt;= len(s); i++ {
+        // 内层循环的是子数组
+        for j := 0; j &lt; i; j++ {
+            exist := false  
+            if i == len(s) {
+                _, exist = wordDictSet[s[j:]]
+            } else {
+                _, exist = wordDictSet[s[j:i]]
+            }
+            if dp[j] &amp;&amp; exist {
+                dp[i] = true
+            }
+        }
+    }
+
+    return dp[len(s)]
+}
+</code></pre>
+<p>&nbsp;</p>
+<h1 id='多维动态规划'>多维动态规划</h1>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<h1 id='排序算法'>排序算法</h1>
+<h2 id='快速排序'>快速排序</h2>
+<p><strong>原数组原地排序</strong></p>
+<p>原理知识：</p>
+<p>（1）排序原理：每次确定一个元素的位置（哨兵），这个元素的左边元素都要比它小，右边的元素都要比它大，然后在对这个元素的左右数组进行排序</p>
+<p>（2）哨兵：预先选出的，每次数组排序最后要确定的位置，通常哨兵为最左边的位置</p>
+<p>（3）待替换位置：直接覆盖，最起始的位置是哨兵位置（在左侧和右侧进行轮换）；从右侧开始比较，不满足条件（左侧的要比哨兵小，右侧的要比哨兵大）要放到待替换的位置</p>
+<p>（4）哨兵位置确定：最后左侧下标等于右侧下标的时候，即哨兵确定的位置</p>
+<p>（5）右侧向左侧推进，左侧向右侧推进：每次直到找到不符合条件的进行替换位置。</p>
+<pre><code class='language-go' lang='go'>func QuickSort(array []int, left, right int) {
+	if left &gt; right {
+		return
+	}
+
+	begin := left
+	end := right
+
+	sentinel := array[left]
+
+	for left &lt; right {
+		// 从右向左推进
+		for left &lt; right {
+			// 找到可以交换的，进行换位
+			if sentinel &gt;= array[right] {
+				array[left] = array[right]
+				left++
+				break
+			}
+			right--
+		}
+
+		// 从左向右推进           
+		for left &lt; right {
+			// 找到可以交换的，进行换位
+			if array[left] &gt;= sentinel {
+				array[right] = array[left]
+				right--
+				break
+			}
+			left++
+		}
+		fmt.Println(&quot;array: &quot;, array, &quot; sentinel: &quot;, sentinel)
+	}
+
+	// left = right
+	array[left] = sentinel
+	// 拆分左右数组
+	QuickSort(array, begin, left-1)
+	QuickSort(array, left+1, end)
+}
+
+</code></pre>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+</body>
+</html>
